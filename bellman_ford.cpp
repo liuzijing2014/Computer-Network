@@ -82,7 +82,7 @@ void outputResult(int vnum, int* distance, int* predecessor, int iteration, stri
 		}
 		ofile << i << endl;
 	}
-	ofile << "Iteration:" << iteration << endl;
+	ofile << "Iteration:" << iteration;
 }
 
 // The implementation of Bellman Ford Algorithm.
@@ -100,21 +100,33 @@ void bellmanFord(int **mgraph, int v, string outputfile)
 		pred[i] = -1;
 	}
 	d[0] = 0;
+	vector<int> updatedNodes;
 
 	// Step 1: dynamics programming at most v-1 iterations.
-	for(int i = 1; i < v-1; i++)
+	for(int i = 1; i < v; i++)
 	{
 		iter++;
-		// Step 2: run through all edges.
-		for(int j = 0; j < v; j++)
+		updatedNodes.clear();
+		// Step 2: Find all nodes that been updated from the previous iterations
+		for(int h = 0; h < v; h++)
 		{
+			if(d[h] != INT_MAX)
+			{
+				updatedNodes.push_back(h);
+			}
+		}
+
+		// Update d[x] for x belongs to updateNodes.
+		for (unsigned q = 0; q < updatedNodes.size(); q++) 
+		{
+			int s = updatedNodes[q];
 			for(int k = 0; k < v; k++)
 			{
-				if(mgraph[j][k] == 0 || mgraph[j][k] == -1) continue;
-				if(d[j] != INT_MAX && d[k] > d[j] + mgraph[j][k])
+				if(mgraph[s][k] == 0 || mgraph[s][k] == -1) continue;
+				if(d[k] > d[s] + mgraph[s][k])
 				{
-					d[k] = d[j] + mgraph[j][k];
-					pred[k] = j;
+					d[k] = d[s] + mgraph[s][k];
+					pred[k] = s;
 					identical = false;
 				}
 			}
@@ -122,7 +134,6 @@ void bellmanFord(int **mgraph, int v, string outputfile)
 		if(identical) break;
 		else identical = true;
 	}
-
 	// Output the result.
 	outputResult(v, d, pred, iter, outputfile);
 }
