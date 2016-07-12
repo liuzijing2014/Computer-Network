@@ -113,7 +113,7 @@ void bellmanFord(int **mgraph, int v, string outputfile)
 				if(mgraph[j][k] == 0 || mgraph[j][k] == -1) continue;
 				if(d[j] != INT_MAX && d[k] > d[j] + mgraph[j][k])
 				{
-					d[k] = d[j] +mgraph[j][k];
+					d[k] = d[j] + mgraph[j][k];
 					pred[k] = j;
 					identical = false;
 				}
