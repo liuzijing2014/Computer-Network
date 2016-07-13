@@ -1,0 +1,117 @@
+Lab 1 Zijing Liu 5350978126
+
+Data Structure:
+
+	I used a 2D int array to store the graph information, int **graph. Each edge is stored as 
+	graph[x][v], where x is the source node and v is the destinaiton node and wight of the edge
+	is graph[x][v]. If there is no edge between two nodes x and v, then graph[x][v] = -1. Also, 
+	graph[x][x] always equals to 0 for obvious reason.
+
+Implementation:
+
+	Parsing: getline is firstly used to get the number of vertex in the graph. Then for each line
+	extracted from the .csv, using getline with delimiter passing in to split comma seperated line
+	to into an int array which stores the weights for each edge indicated by the extracted line. 
+	For * appeared in the line, write a -1 in the corresponding position of the array.As a result, 
+	we fill in int** graph with edge information parsed from .csv file.
+
+	Bellman-Ford algorithm implementation: Besides d[x] and predessor[x] been initilized at first, 
+	we also have a vector<int> updatedNodes, which is used to track the nodes which d[x] been updated from previous
+	iterations. 
+
+		from 1 to v-1{
+
+			for all node v, if d[v] != INT_MAX{
+				updateNodes.push_back(v);
+			}
+
+			for all node v inside updateNodes{
+				go through row v of the graph to get all out going edges (v,x){
+					if d[x] > d[v] + weight(v,x){
+						d[x] = d[v] + weight(v,x);
+						predeseccor[x] = d[v];
+					}
+				}
+			}
+		}
+
+	This implementation is according to the lab description that "Then, we use Bellman-Ford equations to update d0(x) for all node x based on the initialized 𝑑0(0) and repeat the update procedure based on d0 (x) from the last iteration for at most n-1 iterations, where n is the number of nodes in this graph.", which I think is more like the description Dijkstra's algorithm. To my understanding, Bellman-Ford algorithm relax all edges for each iteration instead of only the out going edges of explored nodes. Therefore, the order of how we go through edges for each iteration makes a difference, epsecially to the number of iterations.
+
+	My initial implementation is (not following the lab description and therefore would have a different iteration value for given .csv files):
+
+		from i to v-1{
+
+			go through the graph, graph[i][j]{
+				if graph[i][j] == -1 or 0
+					contiune;
+				if d[x] > d[v] + weight(v,x){
+					d[x] = d[v] + weight(v,x);
+					predeseccor[x] = d[v];
+				}
+			}
+		}
+
+
+Output Format:
+
+	The first line should output the vector 𝑑0(𝑥); The second line should be the shortest path from node 0 to node 0, which is trivial; The third line should be the shortest path from node 0 to node 1; and so on so forth. The last line should be the number of the required iteration. An example is shown below:
+
+	0,1,5,2,4
+	0
+	0->1
+	0->1->2
+	0->3
+	0->3->4
+	Iteration:3
+
+
+Experimental Results:
+
+	N7.csv (the given test case):
+		0,33,13,10,24,26,38
+		0
+		0->3->1
+		0->3->2
+		0->3
+		0->3->4
+		0->3->4->5
+		0->3->1->6
+		Iteration:4
+
+	N10.csv (the given test case):
+		0,5,3,10,2,8,7,1,7,8
+		0
+		0->4->1
+		0->2
+		0->2->6->3
+		0->4
+		0->4->1->5
+		0->2->6
+		0->7
+		0->4->1->8
+		0->2->6->9
+		Iteration:4
+
+	N20.csv (the given test case):
+		0,4,6,7,6,4,10,7,7,4,9,7,8,6,5,3,5,7,4,5
+		0
+		0->15->1
+		0->15->1->2
+		0->5->19->3
+		0->4
+		0->5
+		0->18->6
+		0->5->7
+		0->15->9->8
+		0->15->9
+		0->15->9->10
+		0->18->11
+		0->15->12
+		0->15->13
+		0->5->14
+		0->15
+		0->18->16
+		0->15->9->17
+		0->18
+		0->5->19
+		Iteration:4
