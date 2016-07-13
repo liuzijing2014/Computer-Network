@@ -82,7 +82,7 @@ void outputResult(int vnum, int* distance, int* predecessor, int iteration, stri
 		}
 		ofile << i << endl;
 	}
-	ofile << "Iteration:" << iteration;
+	ofile << "Iteration:" << iteration << endl;
 }
 
 // The implementation of Bellman Ford Algorithm.
