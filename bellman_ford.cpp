@@ -100,33 +100,21 @@ void bellmanFord(int **mgraph, int v, string outputfile)
 		pred[i] = -1;
 	}
 	d[0] = 0;
-	vector<int> updatedNodes;
 
 	// Step 1: dynamics programming at most v-1 iterations.
 	for(int i = 1; i < v; i++)
 	{
 		iter++;
-		updatedNodes.clear();
-		// Step 2: Find all nodes that been updated from the previous iterations
-		for(int h = 0; h < v; h++)
-		{
-			if(d[h] != INT_MAX)
-			{
-				updatedNodes.push_back(h);
-			}
-		}
-
-		// Update d[x] for x belongs to updateNodes.
-		for (unsigned q = 0; q < updatedNodes.size(); q++) 
-		{
-			int s = updatedNodes[q];
+		// Step2: Relax all edges
+		for(int j = 0; j < v; j++)
+		{	
 			for(int k = 0; k < v; k++)
 			{
-				if(mgraph[s][k] == 0 || mgraph[s][k] == -1) continue;
-				if(d[k] > d[s] + mgraph[s][k])
+				if(mgraph[j][k] == 0 || mgraph[j][k] == -1) continue;
+				if(d[j] != INT_MAX && d[k] > d[j] + mgraph[j][k])
 				{
-					d[k] = d[s] + mgraph[s][k];
-					pred[k] = s;
+					d[k] = d[j] + mgraph[j][k];
+					pred[k] = j;
 					identical = false;
 				}
 			}

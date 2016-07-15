@@ -19,26 +19,6 @@ Implementation:
 	we also have a vector<int> updatedNodes, which is used to track the nodes which d[x] been updated from previous
 	iterations. 
 
-		from 1 to v-1{
-
-			for all node v, if d[v] != INT_MAX{
-				updateNodes.push_back(v);
-			}
-
-			for all node v inside updateNodes{
-				go through row v of the graph to get all out going edges (v,x){
-					if d[x] > d[v] + weight(v,x){
-						d[x] = d[v] + weight(v,x);
-						predeseccor[x] = d[v];
-					}
-				}
-			}
-		}
-
-	This implementation is according to the lab description that "Then, we use Bellman-Ford equations to update d0(x) for all node x based on the initialized 𝑑0(0) and repeat the update procedure based on d0 (x) from the last iteration for at most n-1 iterations, where n is the number of nodes in this graph.", which I think is more like the description Dijkstra's algorithm. To my understanding, Bellman-Ford algorithm relax all edges for each iteration instead of only the out going edges of explored nodes. Therefore, the order of how we go through edges for each iteration makes a difference, epsecially to the number of iterations.
-
-	My initial implementation is (not following the lab description and therefore would have a different iteration value for given .csv files):
-
 		from i to v-1{
 
 			go through the graph, graph[i][j]{
@@ -50,6 +30,8 @@ Implementation:
 				}
 			}
 		}
+
+	Notice that the traversal order of edges is from outgoing edges of node 0 to outgoing edges of node 1 to outgoing edges of node 2 and go on. e.g all node 1 outgoing edges -> all node 2 outgoing edges -> .... -> all node v outgoing edges.
 
 
 Output Format:
@@ -67,6 +49,9 @@ Output Format:
 
 Experimental Results:
 
+
+	Because of the traversal orde I chose for my implementation, the iteration value is one less than the given one. For all the given test cases, most shortest paths are formed in ascending order, e.g 0->1->2->6, and therefore what happens is that within the same iteration, the entire shortest path for some node is founded. For example, within the same iteration, traversing outgoing edges of node 1 and d[1] is updated since E(0,1) exists. Then traversing all outgoing edges of node 1 and d[2] is updated since E(1,2) exists. Then traversing all outgoing edges of node 3 and d[3] is updated since E(2,3) exists. If it happens to be that the shortest path form node 0 to node 3 is 0->1->2->3, then we have just found that path within the same iteration rather than what supposed to be within 3 iterations.
+
 	N7.csv (the given test case):
 		0,33,13,10,24,26,38
 		0
@@ -76,7 +61,7 @@ Experimental Results:
 		0->3->4
 		0->3->4->5
 		0->3->1->6
-		Iteration:4
+		Iteration:3
 
 	N10.csv (the given test case):
 		0,5,3,10,2,8,7,1,7,8
@@ -90,7 +75,7 @@ Experimental Results:
 		0->7
 		0->4->1->8
 		0->2->6->9
-		Iteration:4
+		Iteration:3
 
 	N20.csv (the given test case):
 		0,4,6,7,6,4,10,7,7,4,9,7,8,6,5,3,5,7,4,5
@@ -114,4 +99,4 @@ Experimental Results:
 		0->15->9->17
 		0->18
 		0->5->19
-		Iteration:4
+		Iteration:3
