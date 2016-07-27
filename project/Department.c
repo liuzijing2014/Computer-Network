@@ -1,39 +1,94 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <sys/wait.h>
 #include "Department.h"
 
-static struct program_info* program_list[3];
-static int counter = 0;
 
-struct program_info* read_proginfo(const char* file_name)
+
+void send_to_server(char** info_list)
 {
+	for(int j = 0; j < PROGRAM_NUM; j++)
+	{
+		printf("%s\n", info_list[j]);
+	}
+}
+
+
+/* Parse program inforamtion from an input filef or a given department. */
+void read_proginfo(const char *file_name, char** program_list)
+{
+	int counter = 0;																/* Entry counter for the array */
 	char *line = NULL;
 	size_t len = 0;
 	FILE *fp = fopen(file_name, "r");
-	struct program_info *pi;
 
 	// Read in information about the program
-	char* token;
-	char delim = '#';
 	while(getline(&line, &len, fp) != -1)
 	{
-		printf("%s", line);
-		pi = malloc(sizeof(struct program_info));
-		pi->department_id = DEPARTMENT_A;
-		token = strtok(line, &delim);
-		pi->program_name = token;
-		token = strtok(NULL, &delim);
-		pi->required_gpa = atof(token);
-		program_list[counter] = pi;
+		int length = strlen(line);
+
+		// Replace new line character with the terminating charcter
+		if(line[length-1] == '\n') 
+		{
+			line[length-1] = '\0';
+		}
+
+		// Make a deep copy of the parsed char*
+		program_list[counter] = malloc(length+1);
+		strcpy(program_list[counter], line);
+
 		counter++;
 	}
+}
 
-	return NULL;
+/* Flow control function for a forked department process */
+void start_department(int depart_id, const char *file_name)
+{
+	char *program_list[PROGRAM_NUM];												/* Array of all program information. */
+	read_proginfo(file_name, program_list);
+	send_to_server(program_list);
+	printf("child process %d terminated \n", getpid());
+	exit(0);
 }
 
 int main(void)
 {
-	read_proginfo("departmentA.txt");
-	for(int i = 0; i < counter; i++)
+	pid_t department_list[DEPARTMENT_NUM];											/* Array of child process pid. */
+	char *files[] = {"departmentA.txt","departmentB.txt","departmentC.txt" };		/* All input files's name. */
+	
+	// Start forking
+	for(int i = 0; i < DEPARTMENT_NUM; i++)
 	{
-		printf("department id is %i, program name is %s, required_gpa is %f \n", program_list[i]->department_id, program_list[i]->program_name, program_list[i]->required_gpa);
+		department_list[i] = fork();
+
+		if(department_list[i] < 0)
+		{
+			exit(-1);
+		}
+
+		if(department_list[i] != 0)
+		{
+			continue;
+		}
+		else
+		{
+			start_department(i, files[i]);
+			break;
+		}
+
 	}
+
+	for(int i = 0; i < DEPARTMENT_NUM; i++)
+	{
+		wait(NULL);
+	}
+	printf("main process terminated \n");
 }
