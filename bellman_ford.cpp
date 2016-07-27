@@ -102,18 +102,18 @@ void bellmanFord(int **mgraph, int v, string outputfile)
 	d[0] = 0;
 
 	// Step 1: dynamics programming at most v-1 iterations.
-	for(int i = 1; i < v-1; i++)
+	for(int i = 1; i < v; i++)
 	{
 		iter++;
-		// Step 2: run through all edges.
+		// Step2: Relax all edges
 		for(int j = 0; j < v; j++)
-		{
+		{	
 			for(int k = 0; k < v; k++)
 			{
 				if(mgraph[j][k] == 0 || mgraph[j][k] == -1) continue;
 				if(d[j] != INT_MAX && d[k] > d[j] + mgraph[j][k])
 				{
-					d[k] = d[j] +mgraph[j][k];
+					d[k] = d[j] + mgraph[j][k];
 					pred[k] = j;
 					identical = false;
 				}
@@ -127,7 +127,6 @@ void bellmanFord(int **mgraph, int v, string outputfile)
 		if(identical) break;
 		else identical = true;
 	}
-
 	// Output the result.
 	outputResult(v, d, pred, iter, outputfile);
 }

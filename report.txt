@@ -1,0 +1,102 @@
+Lab 1 Zijing Liu 5350978126
+
+Data Structure:
+
+	I used a 2D int array to store the graph information, int **graph. Each edge is stored as 
+	graph[x][v], where x is the source node and v is the destinaiton node and wight of the edge
+	is graph[x][v]. If there is no edge between two nodes x and v, then graph[x][v] = -1. Also, 
+	graph[x][x] always equals to 0 for obvious reason.
+
+Implementation:
+
+	Parsing: getline is firstly used to get the number of vertex in the graph. Then for each line
+	extracted from the .csv, using getline with delimiter passing in to split comma seperated line
+	to into an int array which stores the weights for each edge indicated by the extracted line. 
+	For * appeared in the line, write a -1 in the corresponding position of the array.As a result, 
+	we fill in int** graph with edge information parsed from .csv file.
+
+	Bellman-Ford algorithm implementation: Besides d[x] and predessor[x] been initilized at first, 
+	we also have a vector<int> updatedNodes, which is used to track the nodes which d[x] been updated from previous
+	iterations. 
+
+		from i to v-1{
+
+			go through the graph, graph[i][j]{
+				if graph[i][j] == -1 or 0
+					contiune;
+				if d[x] > d[v] + weight(v,x){
+					d[x] = d[v] + weight(v,x);
+					predeseccor[x] = d[v];
+				}
+			}
+		}
+
+	Notice that the traversal order of edges is from outgoing edges of node 0 to outgoing edges of node 1 to outgoing edges of node 2 and go on. e.g all node 1 outgoing edges -> all node 2 outgoing edges -> .... -> all node v outgoing edges.
+
+
+Output Format:
+
+	The first line should output the vector 𝑑0(𝑥); The second line should be the shortest path from node 0 to node 0, which is trivial; The third line should be the shortest path from node 0 to node 1; and so on so forth. The last line should be the number of the required iteration. An example is shown below:
+
+	0,1,5,2,4
+	0
+	0->1
+	0->1->2
+	0->3
+	0->3->4
+	Iteration:3
+
+
+Experimental Results:
+
+
+	Because of the traversal orde I chose for my implementation, the iteration value is one less than the given one. For all the given test cases, most shortest paths are formed in ascending order, e.g 0->1->2->6, and therefore what happens is that within the same iteration, the entire shortest path for some node is founded. For example, within the same iteration, traversing outgoing edges of node 1 and d[1] is updated since E(0,1) exists. Then traversing all outgoing edges of node 1 and d[2] is updated since E(1,2) exists. Then traversing all outgoing edges of node 3 and d[3] is updated since E(2,3) exists. If it happens to be that the shortest path form node 0 to node 3 is 0->1->2->3, then we have just found that path within the same iteration rather than what supposed to be within 3 iterations.
+
+	N7.csv (the given test case):
+		0,33,13,10,24,26,38
+		0
+		0->3->1
+		0->3->2
+		0->3
+		0->3->4
+		0->3->4->5
+		0->3->1->6
+		Iteration:3
+
+	N10.csv (the given test case):
+		0,5,3,10,2,8,7,1,7,8
+		0
+		0->4->1
+		0->2
+		0->2->6->3
+		0->4
+		0->4->1->5
+		0->2->6
+		0->7
+		0->4->1->8
+		0->2->6->9
+		Iteration:3
+
+	N20.csv (the given test case):
+		0,4,6,7,6,4,10,7,7,4,9,7,8,6,5,3,5,7,4,5
+		0
+		0->15->1
+		0->15->1->2
+		0->5->19->3
+		0->4
+		0->5
+		0->18->6
+		0->5->7
+		0->15->9->8
+		0->15->9
+		0->15->9->10
+		0->18->11
+		0->15->12
+		0->15->13
+		0->5->14
+		0->15
+		0->18->16
+		0->15->9->17
+		0->18
+		0->5->19
+		Iteration:3
