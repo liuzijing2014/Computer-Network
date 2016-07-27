@@ -119,6 +119,11 @@ void bellmanFord(int **mgraph, int v, string outputfile)
 				}
 			}
 		}
+		for(int h = 0; h < v; h++)
+		{
+			cout << d[h] << "|";
+		}
+		cout << endl;
 		if(identical) break;
 		else identical = true;
 	}
