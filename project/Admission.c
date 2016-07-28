@@ -28,6 +28,8 @@ static pthread_mutex_t lock;
 static int counter;
 static int running;
 
+static int phase_1;
+
 
 void sigchld_handler(int s)
 {
@@ -50,6 +52,7 @@ void *get_in_addr(struct sockaddr *sa)
 int input_program_info(char* program)
 {
 	pthread_mutex_lock(&lock);
+	phase_1++;
 	pthread_mutex_unlock(&lock);
 }
 
@@ -89,6 +92,8 @@ void connection_handler(int socket)
 		}
 		else
 		{
+
+			input_program_info(buf);
 			if (send(socket, "ACK", 3, 0) == -1) 
 			{
 				perror("send");
@@ -119,6 +124,7 @@ int main(void)
 
 	counter = 0;
 	running = 1;
+	phase_1 = 0;
 
 	// Initilize program list and the lock
 	prog_list = malloc(sizeof(struct program)*3);
@@ -205,7 +211,7 @@ int main(void)
 	}
 
 	printf("server: waiting for connections...\n");
-	while(running) 
+	while(running && (phase_1 < PROGRAM_NUM*DEPARTMENT_NUM)) 
 	{ 
 		sin_size = sizeof(new_address);
 		new_socket = accept(server_socket, (struct sockaddr *)&new_address, &sin_size);
@@ -223,7 +229,6 @@ int main(void)
 		{
 			close(server_socket);
 			connection_handler(new_socket);
-			free(prog_list);
 			exit(0);
 		}
 		close(new_socket);
