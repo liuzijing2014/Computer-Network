@@ -35,7 +35,11 @@ void send_to_server(char** info_list, char id)
 	hints.ai_family = PF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 
+<<<<<<< HEAD
 	if ((rv = getaddrinfo("127.0.0.1", ADMISSION_PORT, &hints, &servinfo)) != 0) 
+=======
+	if ((rv = getaddrinfo(ADMISSION_HOSTNAME, ADMISSION_PORT, &hints, &servinfo)) != 0) 
+>>>>>>> ff1a4fcf014924b38279e041796e9338412790b2
 	{
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		exit(1);
@@ -67,17 +71,18 @@ void send_to_server(char** info_list, char id)
 		exit(2);
 	}
 
-	// struct sockaddr_in localAddress;
-	// socklen_t addressLength;
-	// addressLength = sizeof localAddress;
-	// getsockname(sockfd, (struct sockaddr*)&localAddress, &addressLength);
-	// printf("local address: %s\n", inet_ntoa( localAddress.sin_addr));
-	// printf("local port: %d\n", (int) ntohs(localAddress.sin_port));
-
-	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof(s));
-	printf("client: connecting to %s\n", s);
-
-	freeaddrinfo(servinfo); // all done with this structure
+	char depart_name;
+	if(id == '0') depart_name = 'A';
+	else if(id == '1') depart_name = 'B';
+	else if(id == '2') depart_name = 'C';
+	struct sockaddr_in localAddress;
+	socklen_t addressLength;
+	addressLength = sizeof localAddress;
+	getsockname(sockfd, (struct sockaddr*)&localAddress, &addressLength);
+	printf("Department%s has TCP port %d and IP address %s for Phase 1\n", &depart_name, (int)ntohs(localAddress.sin_port), inet_ntoa( localAddress.sin_addr));
+	printf("Department%s is now connected to the admission office\n", &depart_name);
+	
+	freeaddrinfo(servinfo);
 
 	// Send the first msg which contains the department id
 	if(send(sockfd, &id, 1, 0) == -1)
@@ -101,9 +106,12 @@ void send_to_server(char** info_list, char id)
 	  return;
 	}
 
+	char delim = '#';
 	int index = 0;
-	while((result = send(sockfd, info_list[index++], strlen(info_list[1]), 0)) != -1)
-	{ 
+	while((result = send(sockfd, info_list[index], strlen(info_list[1]), 0)) != -1)
+	{
+	  char *token = strtok(info_list[index++], &delim);
+	  printf("Department%s has sent %s to the admission office\n", &depart_name, token);
 		if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1)
 		{
 			perror("receive ACK");
@@ -120,12 +128,13 @@ void send_to_server(char** info_list, char id)
 			 if(send(sockfd, "END", 3, 0) == -1)
 			 {
 			 	perror("send END");
-			 }	
+			 }
+			 printf("Updating the admission office is done for Department%s\n", &depart_name);
 			 break;
 		}
 	}
 	close(sockfd);  
-
+	printf("End of Phase 1 for Department%s\n", &depart_name);
 }
 
 
@@ -145,7 +154,6 @@ void read_proginfo(const char *file_name, char** program_list)
 		// Replace new line character with the terminating charcter
 		if(line[length-1] == '\n') 
 		{
-		  printf("new line character found\n");
 		  line[length-1] = '\0';
 		}
 		length = strlen(line);
@@ -153,17 +161,8 @@ void read_proginfo(const char *file_name, char** program_list)
 		// Make a deep copy of the parsed char*
 		program_list[counter] = malloc(length+4);
 		strcpy(program_list[counter], line);
-		//program_list[counter][length] = '#';
-		//program_list[counter][length+1] = (id + '0');
-		//program_list[counter][length+2] = '\0';
 		counter++;
 	}
-	int k;
-	for(k=0;k<PROGRAM_NUM;k++)
-	{
-	  printf("%s\n", program_list[k]);
-	}
-
 }
 
 /* Flow control function for a forked department process */
@@ -172,7 +171,6 @@ void start_department(int depart_id, const char *file_name)
 	char *program_list[PROGRAM_NUM];												/* Array of all program information. */
 	read_proginfo(file_name, program_list);
 	send_to_server(program_list, (depart_id + '0'));
-	printf("child process %d terminated \n", getpid());
 	exit(0);
 }
 
@@ -208,5 +206,4 @@ int main(void)
 	{
 		wait(NULL);
 	}
-	printf("main process terminated \n");
 }
