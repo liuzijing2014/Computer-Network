@@ -29,6 +29,8 @@ static pthread_mutex_t lock;
 static int *counter;
 static int running;
 
+static int phase_1;
+
 
 void sigchld_handler(int s)
 {
@@ -51,8 +53,12 @@ void *get_in_addr(struct sockaddr *sa)
 int input_program_info(char* program)
 {
 	pthread_mutex_lock(&lock);
+<<<<<<< HEAD
+	phase_1++;
+=======
 	(*counter)++;
 	printf("counter is %d\n", *counter);
+>>>>>>> ff1a4fcf014924b38279e041796e9338412790b2
 	pthread_mutex_unlock(&lock);
 }
 
@@ -96,7 +102,12 @@ void connection_handler(int socket)
 		}
 		else
 		{
+<<<<<<< HEAD
+
+			input_program_info(buf);
+=======
 			input_program_info(NULL);
+>>>>>>> ff1a4fcf014924b38279e041796e9338412790b2
 			if (send(socket, "ACK", 3, 0) == -1) 
 			{
 				perror("send");
@@ -136,6 +147,7 @@ int main(void)
 	prog_list = (struct program*)mmap(NULL, sizeof(struct program)*PROGRAM_NUM*DEPARTMENT_NUM, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	*counter = 0;
 	running = 1;
+	phase_1 = 0;
 
 	if(pthread_mutex_init(&lock, NULL) != 0)
 	{
@@ -214,7 +226,12 @@ int main(void)
 		exit(1);
 	}
 
+<<<<<<< HEAD
+	printf("server: waiting for connections...\n");
+	while(running && (phase_1 < PROGRAM_NUM*DEPARTMENT_NUM)) 
+=======
 	while(running) 
+>>>>>>> ff1a4fcf014924b38279e041796e9338412790b2
 	{ 
 		sin_size = sizeof(new_address);
 		new_socket = accept(server_socket, (struct sockaddr *)&new_address, &sin_size);
@@ -232,7 +249,6 @@ int main(void)
 		{
 			close(server_socket);
 			connection_handler(new_socket);
-			free(prog_list);
 			exit(0);
 		}
 		close(new_socket);

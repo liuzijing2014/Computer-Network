@@ -35,7 +35,11 @@ void send_to_server(char** info_list, char id)
 	hints.ai_family = PF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 
+<<<<<<< HEAD
+	if ((rv = getaddrinfo("127.0.0.1", ADMISSION_PORT, &hints, &servinfo)) != 0) 
+=======
 	if ((rv = getaddrinfo(ADMISSION_HOSTNAME, ADMISSION_PORT, &hints, &servinfo)) != 0) 
+>>>>>>> ff1a4fcf014924b38279e041796e9338412790b2
 	{
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		exit(1);
