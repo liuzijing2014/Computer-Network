@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <string.h>
 #include <netdb.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -25,7 +26,7 @@ struct program
 
 static struct program *prog_list;
 static pthread_mutex_t lock;
-static int counter;
+static int *counter;
 static int running;
 
 
@@ -50,6 +51,8 @@ void *get_in_addr(struct sockaddr *sa)
 int input_program_info(char* program)
 {
 	pthread_mutex_lock(&lock);
+	(*counter)++;
+	printf("counter is %d\n", *counter);
 	pthread_mutex_unlock(&lock);
 }
 
@@ -58,6 +61,7 @@ void connection_handler(int socket)
 {
 	int numbytes;
 	int id;
+	char name;
 	char buf[MAXDATASIZE];
 	
 	// First msg should be the department id
@@ -69,8 +73,10 @@ void connection_handler(int socket)
 	}
 	else
 	{
+	  if(buf[0] == '0') name = 'A';
+	  else if(buf[0] == '1') name = 'B';
+	  else if(buf[0] == '2') name = 'C';
 	  id = atoi(&buf[0]);
-	  printf("id recieved is %d\n", id);
 	  if(send(socket, "ACK", 3, 0) == -1)
 	  {
 	    perror("send ACK");
@@ -82,19 +88,22 @@ void connection_handler(int socket)
 	while((numbytes = recv(socket, buf, MAXDATASIZE-1, 0)) != -1) 
 	{
 		buf[numbytes] = '\0';
-		printf("server: received '%s'\n",buf);
+		//printf("server: received:%s\n",buf);
 		if(strcmp(buf, "END") == 0)
 		{
+			printf("Received the program list from Department%s\n", &name);
 			break;
 		}
 		else
 		{
+			input_program_info(NULL);
 			if (send(socket, "ACK", 3, 0) == -1) 
 			{
 				perror("send");
 				close(socket);
 				exit(1);
 			}
+
 		}
 
 	}
@@ -103,6 +112,12 @@ void connection_handler(int socket)
 	{
 		perror("recv");
 	}
+	pthread_mutex_lock(&lock);
+	if (*counter == (PROGRAM_NUM * DEPARTMENT_NUM))
+	{
+		printf("End of Phase 1 for the admission office\n");
+	}
+	pthread_mutex_unlock(&lock);
 	close(socket);
 }
 
@@ -117,7 +132,8 @@ int main(void)
 	int yes = 1;
 	char s[INET_ADDRSTRLEN];
 
-	counter = 0;
+	counter =  mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	*counter = 0;
 	running = 1;
 
 	// Initilize program list and the lock
@@ -130,19 +146,18 @@ int main(void)
 
 
 	if(pthread_mutex_init(&lock, NULL) != 0)
-    {
-        printf("mutex init failed\n");
-        return 1;
-    }
+	{
+	  printf("mutex init failed\n");
+	  return 1;
+	}
 
 	// Initilize addrinfo struct for loading
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = PF_INET;
 	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE;
 
 	// Load server addressinfo struct, used for later
-	if ((result = getaddrinfo(NULL, ADMISSION_PORT, &hints, &servinfo)) != 0) 
+	if ((result = getaddrinfo(ADMISSION_HOSTNAME, ADMISSION_PORT, &hints, &servinfo)) != 0) 
 	{
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(result));
 		free(prog_list);
@@ -184,6 +199,7 @@ int main(void)
 		free(prog_list);
 		return 2;
 	}
+	
 
 	freeaddrinfo(servinfo);
 
@@ -194,6 +210,8 @@ int main(void)
 		exit(1);
 	}
 
+	printf("The admission office has TCP port %d and IP address %s\n", (int) ntohs(((struct sockaddr_in*)p->ai_addr)->sin_port), inet_ntoa(((struct sockaddr_in*)p->ai_addr)->sin_addr));
+	
 	sa.sa_handler = sigchld_handler;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = SA_RESTART;
@@ -204,7 +222,6 @@ int main(void)
 		exit(1);
 	}
 
-	printf("server: waiting for connections...\n");
 	while(running) 
 	{ 
 		sin_size = sizeof(new_address);
@@ -212,12 +229,12 @@ int main(void)
 
 		if (new_socket == -1) 
 		{
-			perror("accept");
+			//perror("accept");
 			continue;
 		}
 
 		inet_ntop(new_address.ss_family, get_in_addr((struct sockaddr *)&new_address), s, sizeof(s));
-		printf("server: got connection from %s port %d\n", s, ((struct sockaddr_in *)&new_address)->sin_port);
+		//printf("server: got connection from %s port %d\n", s, ((struct sockaddr_in *)&new_address)->sin_port);
 
 		if (!fork()) 
 		{
@@ -229,6 +246,7 @@ int main(void)
 		close(new_socket);
 	}
 	free(prog_list);
+	munmap((void*)counter, sizeof(int));
 	pthread_mutex_destroy(&lock);
 	return 0;
 }
