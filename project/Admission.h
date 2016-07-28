@@ -9,7 +9,7 @@
 #define PROGRAM_NUM (int)3
 
 /* Constants for networking */
-#define ADMISSION_HOSTNAME "nunki.usc.edu"
+//#define ADMISSION_HOSTNAME "nunki.usc.edu"
 #define ADMISSION_PORT "3426"
 
 #endif
