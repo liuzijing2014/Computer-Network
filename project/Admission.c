@@ -132,18 +132,10 @@ int main(void)
 	int yes = 1;
 	char s[INET_ADDRSTRLEN];
 
-	counter =  mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	counter =  (int*)mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	prog_list = (struct program*)mmap(NULL, sizeof(struct program)*PROGRAM_NUM*DEPARTMENT_NUM, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	*counter = 0;
 	running = 1;
-
-	// Initilize program list and the lock
-	prog_list = malloc(sizeof(struct program)*3);
-	if(prog_list == NULL)
-	{
-		printf("Allocate program list failed\n");
-		return 1;
-	}
-
 
 	if(pthread_mutex_init(&lock, NULL) != 0)
 	{
@@ -245,7 +237,7 @@ int main(void)
 		}
 		close(new_socket);
 	}
-	free(prog_list);
+	munmap((void*)prog_list, sizeof(struct program)*PROGRAM_NUM*DEPARTMENT_NUM);
 	munmap((void*)counter, sizeof(int));
 	pthread_mutex_destroy(&lock);
 	return 0;
