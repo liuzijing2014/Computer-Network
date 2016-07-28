@@ -57,7 +57,28 @@ int input_program_info(char* program)
 void connection_handler(int socket)
 {
 	int numbytes;
+	int id;
 	char buf[MAXDATASIZE];
+	
+	// First msg should be the department id
+	if((numbytes = recv(socket, buf, MAXDATASIZE-1, 0)) == -1)
+	{
+	  perror("recieve id");
+	  close(socket);
+	  exit(1);
+	}
+	else
+	{
+	  id = atoi(&buf[0]);
+	  printf("id recieved is %d\n", id);
+	  if(send(socket, "ACK", 3, 0) == -1)
+	  {
+	    perror("send ACK");
+	    close(socket);
+	    exit(1);
+	  }
+	}
+
 	while((numbytes = recv(socket, buf, MAXDATASIZE-1, 0)) != -1) 
 	{
 		buf[numbytes] = '\0';

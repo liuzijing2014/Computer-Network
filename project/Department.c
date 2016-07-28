@@ -23,7 +23,7 @@ void *get_in_addr(struct sockaddr *sa)
 }
 
 
-void send_to_server(char** info_list)
+void send_to_server(char** info_list, char id)
 {
 	int sockfd, numbytes, result;
 	char buf[MAXDATASIZE];
@@ -35,7 +35,7 @@ void send_to_server(char** info_list)
 	hints.ai_family = PF_INET;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if ((rv = getaddrinfo("127.0.0.1", ADMISSION_PORT, &hints, &servinfo)) != 0) 
+	if ((rv = getaddrinfo("nunki.usc.edu", ADMISSION_PORT, &hints, &servinfo)) != 0) 
 	{
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		exit(1);
@@ -79,6 +79,28 @@ void send_to_server(char** info_list)
 
 	freeaddrinfo(servinfo); // all done with this structure
 
+	// Send the first msg which contains the department id
+	if(send(sockfd, &id, 1, 0) == -1)
+	{
+	  perror("send id");
+	  close(sockfd);
+	  return;
+	}
+
+	if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1)
+	{
+	  perror("id not ack");
+	  close(sockfd);
+	  return;
+	}
+	
+	buf[numbytes] = '\0';
+	if(strcmp(buf, "ACK") != 0)
+	{
+	  perror("id ACK not right");
+	  return;
+	}
+
 	int index = 0;
 	while((result = send(sockfd, info_list[index++], strlen(info_list[1]), 0)) != -1)
 	{ 
@@ -108,7 +130,7 @@ void send_to_server(char** info_list)
 
 
 /* Parse program inforamtion from an input filef or a given department. */
-void read_proginfo(const char *file_name, char** program_list, int id)
+void read_proginfo(const char *file_name, char** program_list)
 {
 	int counter = 0;																/* Entry counter for the array */
 	char line[255];
@@ -123,26 +145,33 @@ void read_proginfo(const char *file_name, char** program_list, int id)
 		// Replace new line character with the terminating charcter
 		if(line[length-1] == '\n') 
 		{
-			line[length-1] = '\0';
+		  printf("new line character found\n");
+		  line[length-1] = '\0';
 		}
 		length = strlen(line);
 
 		// Make a deep copy of the parsed char*
-		program_list[counter] = malloc(length+3);
+		program_list[counter] = malloc(length+4);
 		strcpy(program_list[counter], line);
-		program_list[counter][length] = '#';
-		program_list[counter][length+1] = (id + '0');
-		program_list[counter][length+2] = '\0';
+		//program_list[counter][length] = '#';
+		//program_list[counter][length+1] = (id + '0');
+		//program_list[counter][length+2] = '\0';
 		counter++;
 	}
+	int k;
+	for(k=0;k<PROGRAM_NUM;k++)
+	{
+	  printf("%s\n", program_list[k]);
+	}
+
 }
 
 /* Flow control function for a forked department process */
 void start_department(int depart_id, const char *file_name)
 {
 	char *program_list[PROGRAM_NUM];												/* Array of all program information. */
-	read_proginfo(file_name, program_list, depart_id);
-	send_to_server(program_list);
+	read_proginfo(file_name, program_list);
+	send_to_server(program_list, (depart_id + '0'));
 	printf("child process %d terminated \n", getpid());
 	exit(0);
 }
