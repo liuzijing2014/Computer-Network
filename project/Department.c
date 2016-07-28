@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -11,8 +10,6 @@
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include "Admission.h"
-
-#define MAXDATASIZE 100 // max number of bytes we can get at once
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -28,7 +25,7 @@ void *get_in_addr(struct sockaddr *sa)
 
 void send_to_server(char** info_list)
 {
-	int sockfd, numbytes;
+	int sockfd, numbytes, result;
 	char buf[MAXDATASIZE];
 	struct addrinfo hints, *servinfo, *p;
 	int rv;
@@ -43,6 +40,7 @@ void send_to_server(char** info_list)
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		exit(1);
 	}
+
 	// loop through all the results and connect to the first we can
 	for(p = servinfo; p != NULL; p = p->ai_next) 
 	{
@@ -69,39 +67,56 @@ void send_to_server(char** info_list)
 		exit(2);
 	}
 
-	struct sockaddr_in localAddress;
-	socklen_t addressLength;
-	addressLength = sizeof localAddress;
-	getsockname(sockfd, (struct sockaddr*)&localAddress, &addressLength);
-	printf("local address: %s\n", inet_ntoa( localAddress.sin_addr));
-	printf("local port: %d\n", (int) ntohs(localAddress.sin_port));
+	// struct sockaddr_in localAddress;
+	// socklen_t addressLength;
+	// addressLength = sizeof localAddress;
+	// getsockname(sockfd, (struct sockaddr*)&localAddress, &addressLength);
+	// printf("local address: %s\n", inet_ntoa( localAddress.sin_addr));
+	// printf("local port: %d\n", (int) ntohs(localAddress.sin_port));
 
 	inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof(s));
 	printf("client: connecting to %s\n", s);
+
 	freeaddrinfo(servinfo); // all done with this structure
 
-	if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
-		perror("recv");
-		exit(1);
+	int index = 0;
+	while((result = send(sockfd, info_list[index++], strlen(info_list[1]), 0)) != -1)
+	{ 
+		if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1)
+		{
+			perror("receive ACK");
+			break;
+		}
+		buf[numbytes] = '\0';
+		if(strcmp(buf, "ACK") != 0)
+		{
+			perror("ACK not right");
+			break;
+		}
+		if(index == PROGRAM_NUM)
+		{
+			 if(send(sockfd, "END", 3, 0) == -1)
+			 {
+			 	perror("send END");
+			 }	
+			 break;
+		}
 	}
-
-	buf[numbytes] = '\0';
-	printf("client: received '%s'\n",buf);
 	close(sockfd);  
 
 }
 
 
 /* Parse program inforamtion from an input filef or a given department. */
-void read_proginfo(const char *file_name, char** program_list)
+void read_proginfo(const char *file_name, char** program_list, int id)
 {
 	int counter = 0;																/* Entry counter for the array */
-	char *line = NULL;
-	size_t len = 0;
+	char line[255];
+	size_t len = 255;
 	FILE *fp = fopen(file_name, "r");
 
 	// Read in information about the program
-	while(getline(&line, &len, fp) != -1)
+	while(fgets(line, len, fp) != NULL)
 	{
 		int length = strlen(line);
 
@@ -110,11 +125,14 @@ void read_proginfo(const char *file_name, char** program_list)
 		{
 			line[length-1] = '\0';
 		}
+		length = strlen(line);
 
 		// Make a deep copy of the parsed char*
-		program_list[counter] = malloc(length+1);
+		program_list[counter] = malloc(length+3);
 		strcpy(program_list[counter], line);
-
+		program_list[counter][length] = '#';
+		program_list[counter][length+1] = (id + '0');
+		program_list[counter][length+2] = '\0';
 		counter++;
 	}
 }
@@ -123,7 +141,7 @@ void read_proginfo(const char *file_name, char** program_list)
 void start_department(int depart_id, const char *file_name)
 {
 	char *program_list[PROGRAM_NUM];												/* Array of all program information. */
-	read_proginfo(file_name, program_list);
+	read_proginfo(file_name, program_list, depart_id);
 	send_to_server(program_list);
 	printf("child process %d terminated \n", getpid());
 	exit(0);

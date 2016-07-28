@@ -9,17 +9,30 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
+#include <signal.h>
+#include <pthread.h>
 #include "Admission.h"
 #include "Department.h"
 
 #define BACKLOG 10
 
-// void handle_sigchld(int sig) 
-// {
-//   int saved_errno = errno;
-//   while(waitpid((pid_t)(-1), 0, WNOHANG) > 0){}
-//   errno = saved_errno;
-// }
+struct program
+{
+	int department_id;
+	char* program_name;
+	float required_gpa;
+};
+
+static struct program *prog_list;
+static pthread_mutex_t lock;
+static int counter;
+static int running;
+
+
+void sigchld_handler(int s)
+{
+	while(waitpid(-1, NULL, WNOHANG) > 0);
+}
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -33,6 +46,45 @@ void *get_in_addr(struct sockaddr *sa)
 }
 
 
+// Add recieced program information into admission database 
+int input_program_info(char* program)
+{
+	pthread_mutex_lock(&lock);
+	pthread_mutex_unlock(&lock);
+}
+
+// Handle new connected client
+void connection_handler(int socket)
+{
+	int numbytes;
+	char buf[MAXDATASIZE];
+	while((numbytes = recv(socket, buf, MAXDATASIZE-1, 0)) != -1) 
+	{
+		buf[numbytes] = '\0';
+		printf("server: received '%s'\n",buf);
+		if(strcmp(buf, "END") == 0)
+		{
+			break;
+		}
+		else
+		{
+			if (send(socket, "ACK", 3, 0) == -1) 
+			{
+				perror("send");
+				close(socket);
+				exit(1);
+			}
+		}
+
+	}
+
+	if(numbytes == -1)
+	{
+		perror("recv");
+	}
+	close(socket);
+}
+
 int main(void)
 {
 	int server_socket, new_socket; 						/* Listen on server_soket, new connection on new_socket */
@@ -40,11 +92,27 @@ int main(void)
 	struct sockaddr_storage new_address; 				/* Connector's address information */
 	socklen_t sin_size;
 	int result;											/* Track function return value */
-
-	/* For reap zombie processes */
-	// struct sigaction sa;
+	struct sigaction sa;
 	int yes = 1;
 	char s[INET_ADDRSTRLEN];
+
+	counter = 0;
+	running = 1;
+
+	// Initilize program list and the lock
+	prog_list = malloc(sizeof(struct program)*3);
+	if(prog_list == NULL)
+	{
+		printf("Allocate program list failed\n");
+		return 1;
+	}
+
+
+	if(pthread_mutex_init(&lock, NULL) != 0)
+    {
+        printf("mutex init failed\n");
+        return 1;
+    }
 
 	// Initilize addrinfo struct for loading
 	memset(&hints, 0, sizeof(hints));
@@ -56,6 +124,7 @@ int main(void)
 	if ((result = getaddrinfo(NULL, ADMISSION_PORT, &hints, &servinfo)) != 0) 
 	{
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(result));
+		free(prog_list);
 		return 1;
 	}
 
@@ -73,6 +142,7 @@ int main(void)
 		if(setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes,sizeof(int)) == -1) 
 		{
 			perror("setsockopt");
+			free(prog_list);
 			exit(1);
 		}
 
@@ -90,6 +160,7 @@ int main(void)
 	if(p == NULL) 
 	{
 		fprintf(stderr, "server: failed to bind\n");
+		free(prog_list);
 		return 2;
 	}
 
@@ -98,21 +169,22 @@ int main(void)
 	if(listen(server_socket, BACKLOG) == -1) 
 	{
 		perror("listen");
+		free(prog_list);
 		exit(1);
 	}
 
-	// Reap zombie processes.
-	// sa.sa_handler = sigchld_handler;
-	// sigemptyset(&sa.sa_mask);
-	// sa.sa_flags = SA_RESTART;
-	// if (sigaction(SIGCHLD, &sa, NULL) == -1) 
-	// {
-	// 	perror("sigaction");
-	// 	exit(1);
-	// }
+	sa.sa_handler = sigchld_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART;
+	if (sigaction(SIGCHLD, &sa, NULL) == -1) 
+	{
+		perror("sigaction");
+		free(prog_list);
+		exit(1);
+	}
 
 	printf("server: waiting for connections...\n");
-	while(1) 
+	while(running) 
 	{ 
 		sin_size = sizeof(new_address);
 		new_socket = accept(server_socket, (struct sockaddr *)&new_address, &sin_size);
@@ -128,13 +200,14 @@ int main(void)
 
 		if (!fork()) 
 		{
-			close(server_socket); // child doesn't need the listener
-			if (send(new_socket, "Hello, world!", 13, 0) == -1)
-				perror("send");
-			close(new_socket);
+			close(server_socket);
+			connection_handler(new_socket);
+			free(prog_list);
 			exit(0);
 		}
-		close(new_socket); // parent doesn't need this
+		close(new_socket);
 	}
+	free(prog_list);
+	pthread_mutex_destroy(&lock);
 	return 0;
 }

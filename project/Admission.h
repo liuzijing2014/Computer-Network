@@ -9,7 +9,13 @@
 #define PROGRAM_NUM (int)3
 
 /* Constants for networking */
-//#define ADMISSION_HOSTNAME "nunki.usc.edu"
+#define ADMISSION_HOSTNAME "nunki.usc.edu"
 #define ADMISSION_PORT "3426"
+#define MAXDATASIZE 255 
+#define ENDMSG "END"
+#define ENDSIZE 3
+#define ACKMSG "ACK"
+#define ACKSIZE 3
+
 
 #endif
