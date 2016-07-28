@@ -134,7 +134,8 @@ int main(void)
 	char *files[] = {"departmentA.txt","departmentB.txt","departmentC.txt" };		/* All input files's name. */
 	
 	// Start forking
-	for(int i = 0; i < DEPARTMENT_NUM; i++)
+	int i;
+	for(i = 0; i < DEPARTMENT_NUM; i++)
 	{
 		department_list[i] = fork();
 
@@ -155,7 +156,7 @@ int main(void)
 
 	}
 
-	for(int i = 0; i < DEPARTMENT_NUM; i++)
+	for(i = 0; i < DEPARTMENT_NUM; i++)
 	{
 		wait(NULL);
 	}
