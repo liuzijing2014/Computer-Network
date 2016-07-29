@@ -12,10 +12,8 @@
 #define ADMISSION_HOSTNAME "nunki.usc.edu"
 #define ADMISSION_PORT "3426"
 #define MAXDATASIZE 255 
-#define ENDMSG "END"
-#define ENDSIZE 3
-#define ACKMSG "ACK"
-#define ACKSIZE 3
+#define MAXPROGNAME 128
+#define PROGDATAFILE "program_data_file.txt"
 
 
 #endif

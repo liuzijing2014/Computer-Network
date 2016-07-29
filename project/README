@@ -1,0 +1,72 @@
+Zijing Liu 5350978126
+
+Phase 1 complete. 
+
+How to run: simple type "gmake" will generate two executable files, department and admission.
+Run admission first, which simulates an admission office server. Then run department, which will 
+fork three processes and each of one simulates a department client. For now, when phase 1 job is 
+done, one should manually terminate the server by "Ctrl + C".
+
+Design and Implementation:
+	There are in total three source files: Department.c, Admission.h, Admission.c, and one Makefile. 
+	
+	Department.c: 
+	1. It firstly forks three child processes, which represents one department. Then wait on all child 
+	processes.
+
+	2. Each child process then read in program information from local file and parse the information into
+	desired format. 
+
+	3. Each child process then setup TCP connection to the server, admission office. Then send one packet 
+	for one program.
+	 
+	4. After all information is sent, close the socket and exit.
+
+	Admission.c
+	1. It firstly allocate and initilize data like counter, lock, and etc. Then it sets up the stream server 
+	by creating the server socket, bind the server socket, and then starting listening.
+
+	2. Once the server accpets a connected socket, it forks a child process to handle the connection 
+	and itself starts accpet() again.
+
+	3. The child process then receives the program information from connected remote side. For each
+	packet recieved, it parses the information and then stores into a local file. It also increament
+	a gloabally shared counter to track the number of program recevied.
+
+	4. After the child process recieves program inforamtion from a department. It checks the counter
+	to see if all program information has recieved. If so, it signals the server that phase 1 is end.
+	It also closes the socket and exit.
+
+	Admission.h: It defines several constants that will be used by Department.c and Admission.c
+		
+		/* Constants for departments */
+		#define DEPARTMENT_A (int)0
+		#define DEPARTMENT_B (int)1
+		#define DEPARTMENT_C (int)2
+		...
+
+		/* Constants for networking */
+		#define ADMISSION_HOSTNAME "nunki.usc.edu"
+		#define ADMISSION_PORT "3426"
+		...
+
+Message Transmission:
+	
+	Phase 1 message transmission is in the following format:
+
+	deparment:												admission:
+	send department id			---------------------->		receive and store department id
+	receive ACK					<---------------------		send ACK
+	send first program packet	---------------------->		recieve and store first program packet
+	receive ACK					<---------------------		send ACK
+	send second program packet	---------------------->		recieve and store second program packet
+	receive ACK					<---------------------		send ACK
+	send third program packet	---------------------->		recieve and store third program packet
+	receive ACK					<---------------------		send ACK
+	send END					---------------------->		recieve END msg
+	receive ACK so close socket	<--------------------->		send ACK and close socket
+
+Reused Code:
+	Socket setup and reaping zombie process code blocks are from Beej's guide. I have 
+	comment before any block of code that is from Beej's guide.
+	

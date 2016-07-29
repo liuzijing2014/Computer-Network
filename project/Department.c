@@ -11,7 +11,7 @@
 #include <sys/wait.h>
 #include "Admission.h"
 
-// get sockaddr, IPv4 or IPv6:
+/* get sockaddr, IPv4 or IPv6. *from Beej's guide */
 void *get_in_addr(struct sockaddr *sa)
 {
 	if (sa->sa_family == AF_INET) 
@@ -22,9 +22,11 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-
+/* Connection handler, which sends program information
+ * to the server. This is responsible for phase 1 job. */
 void send_to_server(char** info_list, char id)
 {
+	// Connection Setup. *from Beej's guide
 	int sockfd, numbytes, result;
 	char buf[MAXDATASIZE];
 	struct addrinfo hints, *servinfo, *p;
@@ -41,7 +43,7 @@ void send_to_server(char** info_list, char id)
 		exit(1);
 	}
 
-	// loop through all the results and connect to the first we can
+	// loop through all the results and connect to the first we can. *from Beej's guide
 	for(p = servinfo; p != NULL; p = p->ai_next) 
 	{
 		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
@@ -60,21 +62,25 @@ void send_to_server(char** info_list, char id)
 		break;
 	}
 
-
 	if (p == NULL) 
 	{
 		fprintf(stderr, "client: failed to connect\n");
 		exit(2);
 	}
 
+	// Traslation of underlying department id to department name
 	char depart_name;
 	if(id == '0') depart_name = 'A';
 	else if(id == '1') depart_name = 'B';
 	else if(id == '2') depart_name = 'C';
 	struct sockaddr_in localAddress;
+	
+	// Find port number and ip address of the client socket
 	socklen_t addressLength;
 	addressLength = sizeof localAddress;
 	getsockname(sockfd, (struct sockaddr*)&localAddress, &addressLength);
+	
+	// Print out results
 	printf("Department%s has TCP port %d and IP address %s for Phase 1\n", &depart_name, (int)ntohs(localAddress.sin_port), inet_ntoa( localAddress.sin_addr));
 	printf("Department%s is now connected to the admission office\n", &depart_name);
 	
@@ -83,50 +89,78 @@ void send_to_server(char** info_list, char id)
 	// Send the first msg which contains the department id
 	if(send(sockfd, &id, 1, 0) == -1)
 	{
-	  perror("send id");
-	  close(sockfd);
-	  return;
+		perror("send id");
+		close(sockfd);
+		return;
 	}
 
-	if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1)
+	// Wait to recieve ack msg from the serve
+	if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) <= 0)
 	{
-	  perror("id not ack");
-	  close(sockfd);
-	  return;
+		perror("id not ack");
+		close(sockfd);
+		return;
 	}
 	
+	// Verify the ack msg
 	buf[numbytes] = '\0';
 	if(strcmp(buf, "ACK") != 0)
 	{
-	  perror("id ACK not right");
+	  printf("id ACK not right");
 	  return;
 	}
 
+	// Send program information
 	char delim = '#';
 	int index = 0;
-	while((result = send(sockfd, info_list[index], strlen(info_list[1]), 0)) != -1)
+	while((result = send(sockfd, info_list[index], strlen(info_list[index]), 0)) != -1)
 	{
-	  char *token = strtok(info_list[index++], &delim);
-	  printf("Department%s has sent %s to the admission office\n", &depart_name, token);
+		char *token = strtok(info_list[index++], &delim);
+		printf("Department%s has sent %s to the admission office\n", &depart_name, token);
+
+		// Wait for ack msg
 		if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1)
 		{
 			perror("receive ACK");
-			break;
+			close(sockfd);
+			return;
 		}
+
+		// Verify ack msg
 		buf[numbytes] = '\0';
 		if(strcmp(buf, "ACK") != 0)
 		{
 			perror("ACK not right");
-			break;
+			close(sockfd);
+			return;
 		}
+
+		// If all program information has been sent, then send the end msg and close the socket
 		if(index == PROGRAM_NUM)
 		{
-			 if(send(sockfd, "END", 3, 0) == -1)
-			 {
-			 	perror("send END");
-			 }
-			 printf("Updating the admission office is done for Department%s\n", &depart_name);
-			 break;
+			// Send end msg
+			while(send(sockfd, "END", 3, 0) == -1)
+			{
+				perror("send END");
+			}
+			// Wait for ack msg
+			if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1)
+			{
+				perror("receive ACK");
+				close(sockfd);
+				return;
+			}
+
+			// Verify ack msg
+			buf[numbytes] = '\0';
+			if (strcmp(buf, "ACK") != 0)
+			{
+				perror("ACK not right");
+				close(sockfd);
+				return;
+			}
+			printf("Updating the admission office is done for Department%s\n", &depart_name);
+			break;
 		}
 	}
 	close(sockfd);  
@@ -137,7 +171,7 @@ void send_to_server(char** info_list, char id)
 /* Parse program inforamtion from an input filef or a given department. */
 void read_proginfo(const char *file_name, char** program_list)
 {
-	int counter = 0;																/* Entry counter for the array */
+	int counter = 0;						/* Entry counter for the array */
 	char line[255];
 	size_t len = 255;
 	FILE *fp = fopen(file_name, "r");
@@ -145,26 +179,21 @@ void read_proginfo(const char *file_name, char** program_list)
 	// Read in information about the program
 	while(fgets(line, len, fp) != NULL)
 	{
+		strtok(line, "\r");
 		int length = strlen(line);
 
-		// Replace new line character with the terminating charcter
-		if(line[length-1] == '\n') 
-		{
-		  line[length-1] = '\0';
-		}
-		length = strlen(line);
-
 		// Make a deep copy of the parsed char*
-		program_list[counter] = malloc(length+4);
+		program_list[counter] = malloc(length+1);
 		strcpy(program_list[counter], line);
 		counter++;
 	}
+	fclose(fp);
 }
 
 /* Flow control function for a forked department process */
 void start_department(int depart_id, const char *file_name)
 {
-	char *program_list[PROGRAM_NUM];												/* Array of all program information. */
+	char **program_list = malloc(sizeof(char*)*PROGRAM_NUM);						/* Array of all program information. */
 	read_proginfo(file_name, program_list);
 	send_to_server(program_list, (depart_id + '0'));
 	exit(0);
@@ -172,8 +201,10 @@ void start_department(int depart_id, const char *file_name)
 
 int main(void)
 {
-	pid_t department_list[DEPARTMENT_NUM];											/* Array of child process pid. */
-	char *files[] = {"departmentA.txt","departmentB.txt","departmentC.txt" };		/* All input files's name. */
+	pid_t department_list[DEPARTMENT_NUM];					/* Array of child process pid. */
+	
+	/* All input files's name. */
+	char *files[] = { "departmentA.txt","departmentB.txt","departmentC.txt" };
 	
 	// Start forking
 	int i;
@@ -198,6 +229,7 @@ int main(void)
 
 	}
 
+	// Wait to avoid zombie processes
 	for(i = 0; i < DEPARTMENT_NUM; i++)
 	{
 		wait(NULL);
