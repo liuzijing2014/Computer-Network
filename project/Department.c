@@ -203,6 +203,8 @@ int main(void)
 {
 	pid_t department_list[DEPARTMENT_NUM];					/* Array of child process pid. */
 	
+
+	printf("department starts\n");
 	/* All input files's name. */
 	char *files[] = { "departmentA.txt","departmentB.txt","departmentC.txt" };
 	
@@ -214,6 +216,7 @@ int main(void)
 
 		if(department_list[i] < 0)
 		{
+			printf("fork error\n");
 			exit(-1);
 		}
 

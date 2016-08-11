@@ -13,7 +13,6 @@
 #include <signal.h>
 #include <pthread.h>
 #include "Admission.h"
-#include "Department.h"
 
 #define BACKLOG 10
 
