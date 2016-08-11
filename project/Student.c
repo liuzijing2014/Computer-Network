@@ -24,7 +24,7 @@ void *get_in_addr(struct sockaddr *sa)
 
 /* Connection handler, which sends program information
  * to the server. This is responsible for phase 1 job. */
-void send_to_server(char** info_list, char id)
+void send_to_server(char** info_list, char id, int num)
 {
 	// Connection Setup. *from Beej's guide
 	int sockfd, numbytes, result;
@@ -81,8 +81,8 @@ void send_to_server(char** info_list, char id)
 	getsockname(sockfd, (struct sockaddr*)&localAddress, &addressLength);
 	
 	// Print out results
-	printf("Department%c has TCP port %d and IP address %s for Phase 1\n", depart_name, (int)ntohs(localAddress.sin_port), inet_ntoa( localAddress.sin_addr));
-	printf("Department%c is now connected to the admission office\n", depart_name);
+	//printf("Department%c has TCP port %d and IP address %s for Phase 1\n", depart_name, (int)ntohs(localAddress.sin_port), inet_ntoa( localAddress.sin_addr));
+	//printf("Department%c is now connected to the admission office\n", depart_name);
 	
 	freeaddrinfo(servinfo);
 
@@ -110,13 +110,37 @@ void send_to_server(char** info_list, char id)
 	  return;
 	}
 
-	// Send program information
+	// Send GPA
+	if(send(sockfd, &info_list[0], strlen(info_list[0]), 0) == -1)
+	{
+		perror("send gpa");
+		close(sockfd);
+		return;
+	}
+
+	// Wait to recieve ack msg from the serve
+	if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) <= 0)
+	{
+		perror("gpa not ack");
+		close(sockfd);
+		return;
+	}
+	
+	// Verify the ack msg
+	buf[numbytes] = '\0';
+	if(strcmp(buf, "ACK") != 0)
+	{
+	  printf("gpa ACK not right");
+	  return;
+	}
+
+	// Send program interest
 	char delim = '#';
-	int index = 0;
+	int index = 1;
 	while((result = send(sockfd, info_list[index], strlen(info_list[index]), 0)) != -1)
 	{
-		char *token = strtok(info_list[index++], &delim);
-		printf("Department%c has sent %s to the admission office\n", depart_name, token);
+		//char *token = strtok(info_list[index++], &delim);
+		//printf("Department%c has sent %s to the admission office\n", depart_name, token);
 
 		// Wait for ack msg
 		if((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1)
@@ -136,7 +160,7 @@ void send_to_server(char** info_list, char id)
 		}
 
 		// If all program information has been sent, then send the end msg and close the socket
-		if(index == PROGRAM_NUM)
+		if(index == num)
 		{
 			// Send end msg
 			while(send(sockfd, "END", 3, 0) == -1)
@@ -146,7 +170,7 @@ void send_to_server(char** info_list, char id)
 			// Wait for ack msg
 			if ((numbytes = recv(sockfd, buf, MAXDATASIZE - 1, 0)) == -1)
 			{
-				perror("receive ACK");
+				perror("receive end ACK");
 				close(sockfd);
 				return;
 			}
@@ -155,85 +179,95 @@ void send_to_server(char** info_list, char id)
 			buf[numbytes] = '\0';
 			if (strcmp(buf, "ACK") != 0)
 			{
-				perror("ACK not right");
+				perror("end ACK not right");
 				close(sockfd);
 				return;
 			}
-			printf("Updating the admission office is done for Department%c\n", depart_name);
+			//printf("Updating the admission office is done for Department%c\n", depart_name);
 			break;
 		}
 	}
 	close(sockfd);  
-	printf("End of Phase 1 for Department%c\n", depart_name);
+	//printf("End of Phase 1 for Department%c\n", depart_name);
 }
 
 
 /* Parse program inforamtion from an input filef or a given department. */
-void read_proginfo(const char *file_name, char** program_list)
+int read_studentinfo(const char *file_name, char** student_info)
 {
 	int counter = 0;						/* Entry counter for the array */
 	char line[255];
 	size_t len = 255;
 	FILE *fp = fopen(file_name, "r");
 
+	// Get GPA
+	fgets(line, len, fp);
+	strtok(line, "\r");
+	strtok(line, ":");
+	char* gpa = strtok(NULL, ":");
+	int gpalength = strlen(gpa);
+	student_info[counter] = malloc(gpalength+1);
+	strcpy(student_info[counter], gpa);
+	counter++;
+
 	// Read in information about the program
 	while(fgets(line, len, fp) != NULL)
 	{
 		strtok(line, "\r");
-		int length = strlen(line);
+		strtok(line, ":");
+		char* interest = strtok(NULL, ":");
+		int length = strlen(interest);
 
 		// Make a deep copy of the parsed char*
-		program_list[counter] = malloc(length+1);
-		strcpy(program_list[counter], line);
+		student_info[counter] = malloc(length+1);
+		strcpy(student_info[counter], interest);
 		counter++;
 	}
 	fclose(fp);
 }
 
 /* Flow control function for a forked department process */
-void start_department(int depart_id, const char *file_name)
+void start_student(int student_id, const char *file_name)
 {
-	char **program_list = malloc(sizeof(char*)*PROGRAM_NUM);						/* Array of all program information. */
-	read_proginfo(file_name, program_list);
-	send_to_server(program_list, (depart_id + '0'));
+	char **student_info = malloc(sizeof(char*)*MAXSTUDENT_INFO);		/* Array of all program information. */
+	int num = read_studentinfo(file_name, student_info);
+	send_to_server(student_info, (student_id + '1'), num);
 	exit(0);
 }
 
 int main(void)
 {
-	pid_t department_list[DEPARTMENT_NUM];					/* Array of child process pid. */
+	pid_t student_list[STUDENT_NUM];					/* Array of child process pid. */
 	
-
-	printf("department starts\n");
 	/* All input files's name. */
-	char *files[] = { "departmentA.txt","departmentB.txt","departmentC.txt" };
+	char *files[] = { "student1.txt","student2.txt","student3.txt","student4.txt","student5.txt" };
 	
 	// Start forking
 	int i;
-	for(i = 0; i < DEPARTMENT_NUM; i++)
+	for(i = 0; i < STUDENT_NUM; i++)
 	{
-		department_list[i] = fork();
+		student_list[i] = fork();
 
-		if(department_list[i] < 0)
+		if(student_list[i] < 0)
 		{
 			printf("fork error\n");
 			exit(-1);
 		}
 
-		if(department_list[i] != 0)
+		if(student_list[i] != 0)
 		{
 			continue;
 		}
 		else
 		{
-			start_department(i, files[i]);
+			start_student(i, files[i]);
 			break;
 		}
 
 	}
 
 	// Wait to avoid zombie processes
-	for(i = 0; i < DEPARTMENT_NUM; i++)
+	for(i = 0; i < STUDENT_NUM; i++)
 	{
 		wait(NULL);
 	}

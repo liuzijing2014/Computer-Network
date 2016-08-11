@@ -102,7 +102,7 @@ void connection_handler(int socket)
 		//printf("server: received:%s length is %d\n",buf,strlen(buf));
 		if(strcmp(buf, "END") == 0)
 		{
-			printf("Received the program list from Department%s\n", &name);
+			printf("Received the program list from Department%c\n", name);
 			if (send(socket, "ACK", 3, 0) == -1)
 			{
 				perror("send");

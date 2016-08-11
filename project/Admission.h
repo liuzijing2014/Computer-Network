@@ -7,9 +7,12 @@
 #define DEPARTMENT_C (int)2
 #define DEPARTMENT_NUM (int)3
 #define PROGRAM_NUM (int)3
+#define STUDENT_NUM (int)5
+#define MAXSTUDENT_INFO (int)4
 
 /* Constants for networking */
-#define ADMISSION_HOSTNAME "nunki.usc.edu"
+#define ADMISSION_HOSTNAME "127.0.0.1"
+//#define ADMISSION_HOSTNAME "nunki.usc.edu"
 #define ADMISSION_PORT "3426"
 #define MAXDATASIZE 255 
 #define MAXPROGNAME 128
