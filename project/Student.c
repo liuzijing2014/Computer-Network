@@ -86,7 +86,7 @@ void send_to_server(char** info_list, char id, int num)
 	
 	freeaddrinfo(servinfo);
 
-	// Send the first msg which contains the department id
+	// Send the first msg which contains the student id
 	if(send(sockfd, &id, 1, 0) == -1)
 	{
 		perror("send id");
@@ -202,7 +202,7 @@ int read_studentinfo(const char *file_name, char** student_info)
 
 	// Get GPA
 	fgets(line, len, fp);
-	strtok(line, "\r");
+	strtok(line, "\n");
 	strtok(line, ":");
 	char* gpa = strtok(NULL, ":");
 	int gpalength = strlen(gpa);
@@ -213,7 +213,7 @@ int read_studentinfo(const char *file_name, char** student_info)
 	// Read in information about the program
 	while(fgets(line, len, fp) != NULL)
 	{
-		strtok(line, "\r");
+		strtok(line, "\n");
 		strtok(line, ":");
 		char* interest = strtok(NULL, ":");
 		int length = strlen(interest);
@@ -224,6 +224,14 @@ int read_studentinfo(const char *file_name, char** student_info)
 		counter++;
 	}
 	fclose(fp);
+
+	int h;
+	for(h = 0; h < counter; h++)
+	{
+		printf("%s: %s\n", file_name, student_info[h]);
+	}
+
+	return counter;
 }
 
 /* Flow control function for a forked department process */
@@ -231,7 +239,7 @@ void start_student(int student_id, const char *file_name)
 {
 	char **student_info = malloc(sizeof(char*)*MAXSTUDENT_INFO);		/* Array of all program information. */
 	int num = read_studentinfo(file_name, student_info);
-	send_to_server(student_info, (student_id + '1'), num);
+	//send_to_server(student_info, (student_id + '1'), num);
 	exit(0);
 }
 

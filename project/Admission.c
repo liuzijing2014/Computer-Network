@@ -29,6 +29,52 @@ static pthread_mutexattr_t attrmutex;
 static int *counter;
 const static char delim = '#';
 
+
+// Fill in prog_list from the local file
+void fill_prog_list(void)
+{
+	//free(prog_list);
+	prog_list = malloc(sizeof(struct program) * DEPARTMENT_NUM * PROGRAM_NUM);
+
+	int counter = 0;
+	char line[255];
+	size_t len = 255;
+	FILE *fp = fopen(PROGDATAFILE, "r");
+
+	printf("start filling in\n");
+	// Read in information about the program
+	while(fgets(line, len, fp) != NULL)
+	{
+		strtok(line, "\n");
+		char* prog_name = strtok(line, "#");
+		char* gpa = strtok(NULL, "#");
+		char* depart_id = strtok(NULL, "#");
+		int length = strlen(prog_name);
+
+		//printf("%s %s %s\n", prog_name, gpa, depart_id);
+
+		//prog_list[counter] = malloc(sizeof(struct program));
+		prog_list[counter].department_id = atoi(depart_id);
+		prog_list[counter].program_name = malloc(length+1);
+		strcpy(prog_list[counter].program_name, prog_name);
+		prog_list[counter].required_gpa = atof(gpa);
+		
+		printf("%d %s %f\n", prog_list[counter].department_id , prog_list[counter].program_name, prog_list[counter].required_gpa);
+		counter++;
+
+	}
+	fclose(fp);
+
+	// printf("finish fill in\n");
+	// int h;
+	// for(h = 0; h < counter; h++)
+	// {
+	// 	printf("%d %s %f\n", prog_list[counter].department_id , prog_list[counter].program_name, prog_list[counter].required_gpa);
+	// }
+
+	printf("before return\n");
+}
+
 // *from Beej's guide. For killing zombie processes
 void sigchld_handler(int s)
 {
@@ -133,6 +179,7 @@ void connection_handler(int socket)
 	if (*counter == (PROGRAM_NUM * DEPARTMENT_NUM))
 	{
 		printf("End of Phase 1 for the admission office\n");
+		fill_prog_list();
 	}
 	pthread_mutex_unlock(lock);
 	close(socket);
@@ -179,7 +226,7 @@ int main(void)
 	if ((result = getaddrinfo(ADMISSION_HOSTNAME, ADMISSION_PORT, &hints, &servinfo)) != 0) 
 	{
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(result));
-		free(prog_list);
+		//free(prog_list);
 		return 1;
 	}
 
@@ -197,7 +244,7 @@ int main(void)
 		if(setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &yes,sizeof(int)) == -1) 
 		{
 			perror("setsockopt");
-			free(prog_list);
+			//free(prog_list);
 			exit(1);
 		}
 
@@ -215,7 +262,7 @@ int main(void)
 	if(p == NULL) 
 	{
 		fprintf(stderr, "server: failed to bind\n");
-		free(prog_list);
+		//free(prog_list);
 		return 2;
 	}
 	
@@ -225,7 +272,7 @@ int main(void)
 	if(listen(server_socket, BACKLOG) == -1) 
 	{
 		perror("listen");
-		free(prog_list);
+		//free(prog_list);
 		exit(1);
 	}
 
@@ -238,11 +285,12 @@ int main(void)
 	if (sigaction(SIGCHLD, &sa, NULL) == -1) 
 	{
 		perror("sigaction");
-		free(prog_list);
+		//free(prog_list);
 		exit(1);
 	}
 
 	// Start handling connection
+	int phase2 = 0;
 	while(1) 
 	{ 
 		sin_size = sizeof(new_address);
@@ -254,15 +302,23 @@ int main(void)
 			continue;
 		}
 
+		if ( ( *counter == (PROGRAM_NUM * DEPARTMENT_NUM) ) && (phase2 == 0))
+		{
+			printf("Star of phase two\n");
+			phase2 = 1;
+		}
+
 		inet_ntop(new_address.ss_family, get_in_addr((struct sockaddr *)&new_address), s, sizeof(s));
 		//printf("server: got connection from %s port %d\n", s, ((struct sockaddr_in *)&new_address)->sin_port);
 
 		if (!fork()) 
 		{
-			close(server_socket);
-			connection_handler(new_socket);
-			free(prog_list);
-			exit(0);
+			if(phase2 == 0)
+			{
+				close(server_socket);
+				connection_handler(new_socket);
+				exit(0);
+			}
 		}
 		close(new_socket);
 	}

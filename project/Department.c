@@ -179,7 +179,7 @@ void read_proginfo(const char *file_name, char** program_list)
 	// Read in information about the program
 	while(fgets(line, len, fp) != NULL)
 	{
-		strtok(line, "\r");
+		strtok(line, "\n");
 		int length = strlen(line);
 
 		// Make a deep copy of the parsed char*

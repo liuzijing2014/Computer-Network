@@ -1,6 +1,6 @@
 default: department admission
 
-ubuntu:	department1 admission1
+ubuntu:	department1 admission1 student1
 
 department: Department.c Admission.h
 	gcc Department.c -lnsl -lsocket -lresolv  -o department
@@ -13,6 +13,9 @@ admission: Admission.c Admission.h
 
 admission1: Admission.c Admission.h
 	gcc Admission.c -pthread -o admission
+
+student1: Student.c Admission.h
+	gcc Student.c -o student
 
 clean:
 	-rm -f admission
