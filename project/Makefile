@@ -1,4 +1,4 @@
-default: department admission
+default: department admission student
 
 ubuntu:	department1 admission1 student1
 
@@ -13,6 +13,9 @@ admission: Admission.c Admission.h
 
 admission1: Admission.c Admission.h
 	gcc Admission.c -pthread -o admission
+
+student: Student.c Admission.h
+	gcc Student.c -lnsl -lsocket -lresolv -o student
 
 student1: Student.c Admission.h
 	gcc Student.c -o student

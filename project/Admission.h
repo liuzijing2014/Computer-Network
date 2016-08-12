@@ -11,12 +11,13 @@
 #define MAXSTUDENT_INFO (int)4
 
 /* Constants for networking */
-#define ADMISSION_HOSTNAME "127.0.0.1"
-//#define ADMISSION_HOSTNAME "nunki.usc.edu"
+//#define ADMISSION_HOSTNAME "127.0.0.1"
+#define ADMISSION_HOSTNAME "nunki.usc.edu"
 #define ADMISSION_PORT "3426"
 #define MAXDATASIZE 255 
 #define MAXPROGNAME 128
 #define PROGDATAFILE "program_data_file.txt"
+#define ADMISSIONDATAFILE "admission_data_file.txt"
 
 
 #endif
