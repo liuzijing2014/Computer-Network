@@ -23,17 +23,18 @@ struct program
 	float required_gpa;
 };
 
-static struct program *prog_list;		/* Store all recieved program information */
-static pthread_mutex_t *lock;			/* Lock for avoid race condition */
+static struct program *prog_list;				/* Store all recieved program information */
+static pthread_mutex_t *lock;					/* Lock for avoid race condition */
 static pthread_mutexattr_t attrmutex;
 static int *counter;
 const static char delim = '#';
 const static char new_line = '\n';
-static int *phase1;
-static int *phase25;
+static int *phase1;								/* Flag for phase 1. */
+static int depart_sockets[DEPARTMENT_NUM];		/* Store all UDP sockets for departments. */
+static int student_sockets[STUDENT_NUM];		/* Store all UDP sockets for students. */
 
 
-// Fill in prog_list from the local file
+/* Fill in prog_list from the local file. */
 void fill_prog_list(void)
 {
 	if (prog_list != NULL) free(prog_list);
@@ -78,7 +79,7 @@ void *get_in_addr(struct sockaddr *sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-// Add recieced program information into admission database 
+/* Add recieced program information into admission database. */
 int input_program_info(char* program, int id)
 {
 	char id_char = '0' + id;
@@ -93,8 +94,11 @@ int input_program_info(char* program, int id)
 	pthread_mutex_unlock(lock);
 }
 
+/* Make admission decions based on student's gpa. Write admission details
+ * to the local ADMISSIONDATAFILE file if student has a matched program. */
 int general_selection(char** inter_list, int num, char name, float gpa, char* cgpa)
 {
+	// Fill in prog_list
 	pthread_mutex_lock(lock);
 	if (prog_list == NULL)
 	{
@@ -109,14 +113,19 @@ int general_selection(char** inter_list, int num, char name, float gpa, char* cg
 		int j;
 		for (j = 0; j < (PROGRAM_NUM * DEPARTMENT_NUM); j++)
 		{
+			// Find an interested program
 			if (strcmp(inter_list[i], prog_list[j].program_name) == 0)
 			{
+				// Check if gpa is greater than required gpa.
 				result = 1;
 				if (gpa >= prog_list[j].required_gpa)
 				{
+					// Write admission details for acception.
 					char depart_id = prog_list[j].department_id + '0';
 					pthread_mutex_lock(lock);
 					FILE *fp = fopen(ADMISSIONDATAFILE, "a");
+					fputs("Accept", fp);
+					fputc(delim, fp);
 					fputc(name, fp);
 					fputc(delim, fp);
 					fputc(depart_id, fp);
@@ -132,10 +141,22 @@ int general_selection(char** inter_list, int num, char name, float gpa, char* cg
 			}
 		}
 	}
+	if (result == 1)
+	{
+		// Write admission detail for rejection.
+		pthread_mutex_lock(lock);
+		FILE *fp = fopen(ADMISSIONDATAFILE, "a");
+		fputs("Reject", fp);
+		fputc(delim, fp);
+		fputc(name, fp);
+		fputc(new_line, fp);
+		fclose(fp);
+		pthread_mutex_unlock(lock);
+	}
 	return result;
 }
 
-// Handle new connected client
+/* Handle new connected client for phase1. from Beej's guide */
 void connection_handler(int socket)
 {
 	// Prepare to communicate. *from Beej's guide
@@ -212,6 +233,7 @@ void connection_handler(int socket)
 	close(socket);
 }
 
+/* Handle new connected student client for phase 2. from Beej's guide. */
 void student_handler(int socket)
 {
 	// Prepare to communicate. *from Beej's guide
@@ -325,14 +347,83 @@ void student_handler(int socket)
 		perror("recv");
 	}
 
-	printf("student id %d name %c gpa %f\n", id, name, gpa);
-	int k;
-	for (k = 0; k < interest_num; k++)
-	{
-		printf("student id %d has interest %s\n", id, interest_list[k]);
-	}
+	printf("Admission office receive the application from Student%c\n", name);
 
 	close(socket);
+}
+
+/* UDP Connection handler for phase 2. from Beej's guide.*/
+int udp_handler(char* port, char* msg, int socketid)
+{
+	int sockfd;
+	struct addrinfo hints, *servinfo, *p;
+	int rv;
+	int numbytes;
+	servinfo = NULL;
+
+	// If UDP connection is not yet setup for the given department/student
+	if (socketid == -10)
+	{
+		memset(&hints, 0, sizeof hints);
+		hints.ai_family = AF_INET;
+		hints.ai_socktype = SOCK_DGRAM;
+
+		if ((rv = getaddrinfo(ADMISSION_HOSTNAME, port, &hints, &servinfo)) != 0) {
+			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+			return -10;
+		}
+
+		// loop through all the results and make a socket
+		for (p = servinfo; p != NULL; p = p->ai_next)
+		{
+			if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+			{
+				perror("talker: socket");
+				continue;
+			}
+			break;
+		}
+
+		if (p == NULL)
+		{
+			fprintf(stderr, "talker: failed to bind socket\n");
+			return -10;
+		}
+
+		struct sockaddr_in *localAddress = (struct sockaddr_in*)p->ai_addr;
+		printf("The admission office has UDP port %d and IP address %s for Phase 2\n", (int)ntohs(localAddress->sin_port), inet_ntoa(localAddress->sin_addr));
+		
+		if ((numbytes = sendto(sockfd, msg, strlen(msg), 0, p->ai_addr, p->ai_addrlen)) == -1)
+		{
+			perror("talker: sendto");
+			exit(1);
+		}
+
+		freeaddrinfo(servinfo);
+	}
+	else   /*If UDP connection has already been setup for the given department/student. */
+	{
+		sockfd = socketid;
+
+		memset(&hints, 0, sizeof hints);
+		hints.ai_family = AF_INET;
+		hints.ai_socktype = SOCK_DGRAM;
+
+		if ((rv = getaddrinfo(ADMISSION_HOSTNAME, port, &hints, &servinfo)) != 0) {
+			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+			return -10;
+		}
+		p = servinfo;
+		if ((numbytes = sendto(sockfd, msg, strlen(msg), 0, p->ai_addr, p->ai_addrlen)) == -1)
+		{
+			perror("talker: sendto");
+			exit(1);
+		}
+
+		freeaddrinfo(servinfo);
+	}
+
+	return sockfd;
 }
 
 int main(void)
@@ -350,10 +441,8 @@ int main(void)
 	lock = (pthread_mutex_t*)mmap(NULL, sizeof(pthread_mutex_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	counter =  (int*)mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	phase1 = (int*)mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	phase25 = (int*)mmap(NULL, sizeof(int), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	*counter = 0;
 	*phase1 = 0;
-	*phase25 = 0;
 	prog_list = NULL;
 
 	pthread_mutexattr_init(&attrmutex);
@@ -465,7 +554,6 @@ int main(void)
 
 		if ( ( *counter == (PROGRAM_NUM * DEPARTMENT_NUM) ) && (phase2 == 0))
 		{
-			printf("Star of phase two\n");
 			printf("The admission office has TCP port %d and IP address %s\n", port_number, IP_addr);
 			phase2 = 1;
 		}
@@ -492,8 +580,95 @@ int main(void)
 		if (phase2 != 0) student_counter++;
 		if (student_counter == STUDENT_NUM) break;
 	}
+	
 	while (wait(0) != -1) {}
+
+	// UDP phase 2
+	// Initilize depart_sockets and student_sockets with -10's because all UDP connection is not yet setup.
+	int l;
+	for (l = 0; l < DEPARTMENT_NUM; l++)
+	{
+		depart_sockets[l] = -10;
+	}
+	for (l = 0; l < STUDENT_NUM; l++)
+	{
+		student_sockets[l] = -10;
+	}
+
+	char line[255];
+	size_t len = 255;
+	FILE *fp = fopen(ADMISSIONDATAFILE, "r");
+
+	// Read in information about the admission
+	while (fgets(line, len, fp) != NULL)
+	{
+		strtok(line, "\r");
+		strtok(line, "\n");
+		char* offer = strtok(line, "#");
+		char* sid = strtok(NULL, "#");
+		char* s_port = student_ports[atoi(sid) - 1];
+		
+		// Send rejection msg
+		if (strcmp(offer, "Reject") == 0)
+		{
+			student_sockets[atoi(sid) - 1] = udp_handler(s_port, "Reject", student_sockets[atoi(sid) - 1]);
+			printf("The admission office has send the application result to Student%s\n", sid);
+		}
+		else
+		{
+			char* did = strtok(NULL, "#");
+			char* gpa = strtok(NULL, "#");
+			char* prog_name = strtok(NULL, "#");
+			char *cdid = malloc(2);
+			cdid[0] = department_names[atoi(did)];
+			cdid[1] = '\0';
+			char* d_port = department_ports[atoi(did)];
+
+			char* s_msg = malloc(strlen(prog_name) + 20);
+			strcpy(s_msg, "Accept");
+			strcat(s_msg, "#");
+			strcat(s_msg, prog_name);
+			strcat(s_msg, "#");
+			strcat(s_msg, "department");
+			strcat(s_msg, cdid);
+			student_sockets[atoi(sid)-1] = udp_handler(s_port, s_msg, student_sockets[atoi(sid)-1]);
+
+			// Send accpetion msg
+			printf("The admission office has send the application result to Student%s\n", sid);
+
+
+			char* d_msg = malloc(strlen(prog_name) + strlen(gpa) + 11);
+			strcpy(d_msg, "Student");
+			strcat(d_msg, sid);
+			strcat(d_msg, "#");
+			strcat(d_msg, gpa);
+			strcat(d_msg, "#");
+			strcat(d_msg, prog_name);
+			depart_sockets[atoi(did)] = udp_handler(d_port, d_msg, depart_sockets[atoi(did)]);
+
+			//Send admission msg
+			printf("The admission office has send one admitted student to Department%s\n", cdid);
+		}
+	}
+	fclose(fp);
+
+	// Close all UDP connections
+	for (l = 0; l < DEPARTMENT_NUM; l++)
+	{
+		udp_handler(department_ports[l], "END", depart_sockets[l]);
+		close(depart_sockets[l]);
+	}
+	for (l = 0; l < STUDENT_NUM; l++)
+	{
+		close(student_sockets[l]);
+	}
+
+	printf("End of Phase 2 for the admission office\n");
+
+	// Free resources
 	munmap((void*)counter, sizeof(int));
+	munmap((void*)phase1, sizeof(int));
+	free(prog_list);
 	pthread_mutex_destroy(lock);
 	pthread_mutexattr_destroy(&attrmutex);
 	return 0;

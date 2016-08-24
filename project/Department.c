@@ -167,6 +167,74 @@ void send_to_server(char** info_list, char id)
 	printf("End of Phase 1 for Department%c\n", depart_name);
 }
 
+/* Connection handler for phase 2 UDP connection.
+ * from Beej's guide. */
+void udp_handler(int id)
+{
+	int sockfd;
+	struct addrinfo hints, *servinfo, *p;
+	int rv;
+	int numbytes;
+	struct sockaddr_storage their_addr;
+	char buf[MAXDATASIZE];
+	socklen_t addr_len;
+	char s[INET6_ADDRSTRLEN];
+	char depart_name = department_names[id];
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags = AI_PASSIVE;
+
+	if ((rv = getaddrinfo(ADMISSION_HOSTNAME, department_ports[id], &hints, &servinfo)) != 0) {
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+		return;
+	}
+	// loop through all the results and bind to the first we can
+	for (p = servinfo; p != NULL; p = p->ai_next) {
+		if ((sockfd = socket(p->ai_family, p->ai_socktype,
+			p->ai_protocol)) == -1) {
+			perror("listener: socket");
+			continue;
+		}
+		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+			close(sockfd);
+			perror("listener: bind");
+			continue;
+		}
+		break;
+	}
+
+	if (p == NULL) {
+		fprintf(stderr, "listener: failed to bind socket\n");
+		return;
+	}
+
+	struct sockaddr_in *localAddress = (struct sockaddr_in*)p->ai_addr;
+	printf("Department%c has UDP port %d and IP address %s for Phase 2\n", depart_name, (int)ntohs(localAddress->sin_port), inet_ntoa(localAddress->sin_addr));
+
+	freeaddrinfo(servinfo);
+
+	// Receive results
+	addr_len = sizeof their_addr;
+	while ((numbytes = recvfrom(sockfd, buf, MAXDATASIZE - 1, 0, (struct sockaddr *)&their_addr, &addr_len)) != -1)
+	{
+		buf[numbytes] = '\0';
+		if (strcmp(buf, "END") == 0) break;
+		char* student_id = strtok(buf, "#");
+		char sid = student_id[7];
+		printf("Student%c has been admitted to Department%c\n", sid, depart_name);
+	}
+		
+	if(numbytes == -1)
+	{
+		perror("recvfrom");
+		exit(1);
+	}
+
+	close(sockfd);
+	printf("End of Phase 2 for Department%c\n", depart_name);
+}
 
 /* Parse program inforamtion from an input filef or a given department. */
 void read_proginfo(const char *file_name, char** program_list)
@@ -193,18 +261,17 @@ void read_proginfo(const char *file_name, char** program_list)
 /* Flow control function for a forked department process */
 void start_department(int depart_id, const char *file_name)
 {
-	char **program_list = malloc(sizeof(char*)*PROGRAM_NUM);						/* Array of all program information. */
+	char **program_list = malloc(sizeof(char*)*PROGRAM_NUM);			/* Array of all program information. */
 	read_proginfo(file_name, program_list);
-	send_to_server(program_list, (depart_id + '0'));
+	send_to_server(program_list, (depart_id + '0'));					/* Phase 1 handler. */
+	udp_handler(depart_id);												/* Phase 2 handler. */
 	exit(0);
 }
 
 int main(void)
 {
-	pid_t department_list[DEPARTMENT_NUM];					/* Array of child process pid. */
+	pid_t department_list[DEPARTMENT_NUM];								/* Array of child process pid. */
 	
-
-	printf("department starts\n");
 	/* All input files's name. */
 	char *files[] = { "departmentA.txt","departmentB.txt","departmentC.txt" };
 	

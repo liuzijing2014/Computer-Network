@@ -23,8 +23,9 @@ void *get_in_addr(struct sockaddr *sa)
 }
 
 /* Connection handler, which sends program information
- * to the server. This is responsible for phase 1 job. */
-void send_to_server(char** info_list, char id, int num)
+ * to the server. This is responsible for phase 2 first 
+ * half job. */
+int send_to_server(char** info_list, char id, int num)
 {
 	// Connection Setup. *from Beej's guide
 	int sockfd, numbytes, result;
@@ -68,8 +69,8 @@ void send_to_server(char** info_list, char id, int num)
 		exit(2);
 	}
 
-	struct sockaddr_in localAddress;
 	// Find port number and ip address of the client socket
+	struct sockaddr_in localAddress;
 	socklen_t addressLength;
 	addressLength = sizeof localAddress;
 	getsockname(sockfd, (struct sockaddr*)&localAddress, &addressLength);
@@ -84,7 +85,7 @@ void send_to_server(char** info_list, char id, int num)
 	{
 		perror("send id");
 		close(sockfd);
-		return;
+		return 0;
 	}
 
 	// Wait to recieve ack msg from the serve
@@ -92,7 +93,7 @@ void send_to_server(char** info_list, char id, int num)
 	{
 		perror("num not ack");
 		close(sockfd);
-		return;
+		return 0;
 	}
 	
 	// Verify the ack msg
@@ -100,7 +101,7 @@ void send_to_server(char** info_list, char id, int num)
 	if(strcmp(buf, "ACK") != 0)
 	{
 	  printf("num ACK not right");
-	  return;
+	  return 0;
 	}
 
 	// Send the interested program number then
@@ -109,7 +110,7 @@ void send_to_server(char** info_list, char id, int num)
 	{
 		perror("send id");
 		close(sockfd);
-		return;
+		return 0;
 	}
 
 	// Wait to recieve ack msg from the serve
@@ -117,7 +118,7 @@ void send_to_server(char** info_list, char id, int num)
 	{
 		perror("id not ack");
 		close(sockfd);
-		return;
+		return 0;
 	}
 
 	// Verify the ack msg
@@ -125,7 +126,7 @@ void send_to_server(char** info_list, char id, int num)
 	if (strcmp(buf, "ACK") != 0)
 	{
 		printf("id ACK not right");
-		return;
+		return 0;
 	}
 
 	// Send GPA
@@ -133,7 +134,7 @@ void send_to_server(char** info_list, char id, int num)
 	{
 		perror("send gpa");
 		close(sockfd);
-		return;
+		return 0;
 	}
 
 	// Wait to recieve ack msg from the serve
@@ -141,7 +142,7 @@ void send_to_server(char** info_list, char id, int num)
 	{
 		perror("gpa not ack");
 		close(sockfd);
-		return;
+		return 0;
 	}
 	
 	// Verify the ack msg
@@ -149,7 +150,7 @@ void send_to_server(char** info_list, char id, int num)
 	if(strcmp(buf, "ACK") != 0)
 	{
 	  printf("gpa ACK not right");
-	  return;
+	  return 0;
 	}
 
 	//Send program interest
@@ -165,7 +166,7 @@ void send_to_server(char** info_list, char id, int num)
 		{
 			perror("receive ACK");
 			close(sockfd);
-			return;
+			return 0;
 		}
 
 		// Verify ack msg
@@ -174,7 +175,7 @@ void send_to_server(char** info_list, char id, int num)
 		{
 			printf("ACK not right");
 			close(sockfd);
-			return;
+			return 0;
 		}
 
 		index++;
@@ -194,30 +195,80 @@ void send_to_server(char** info_list, char id, int num)
 			{
 				perror("receive end ACK");
 				close(sockfd);
-				return;
+				return 0;
 			}
 
 			// Verify match msg
 			printf("Student%c has received the reply from the admission office\n", id);
 			buf[numbytes] = '\0';
 			match = atoi(&buf[0]);
-			if (match != 0 && match != 1)
-			{
-				printf("final result not receive correctly %s\n", buf);
-			}
-			else
-			{
-				printf("student %c find a match\n", id);
-			}
-			//printf("Updating the admission office is done for Department%c\n", depart_name);
 			break;
 		}
 	}
 	close(sockfd);  
-	printf("student %c finish send\n", id);
-	//printf("End of Phase 1 for Department%c\n", depart_name);
+	return match;
 }
 
+/* UDP handler for phase 2 second half job.
+ * from Beej's guide. */
+void udp_handler(int id)
+{
+	int sockfd;
+	struct addrinfo hints, *servinfo, *p;
+	int rv;
+	int numbytes;
+	struct sockaddr_storage their_addr;
+	char buf[MAXDATASIZE];
+	socklen_t addr_len;
+	char s[INET6_ADDRSTRLEN];
+
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_DGRAM;
+	hints.ai_flags = AI_PASSIVE;
+
+	if ((rv = getaddrinfo(ADMISSION_HOSTNAME, student_ports[id], &hints, &servinfo)) != 0) {
+		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+		return;
+	}
+	// loop through all the results and bind to the first we can
+	for (p = servinfo; p != NULL; p = p->ai_next) {
+		if ((sockfd = socket(p->ai_family, p->ai_socktype,
+			p->ai_protocol)) == -1) {
+			perror("listener: socket");
+			continue;
+		}
+		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+			close(sockfd);
+			perror("listener: bind");
+			continue;
+		}
+		break;
+	}
+
+	if (p == NULL) {
+		fprintf(stderr, "listener: failed to bind socket\n");
+		return;
+	}
+
+	char cid = id + '1';
+	struct sockaddr_in *localAddress = (struct sockaddr_in*)p->ai_addr;
+	printf("Student%c has UDP port %d and IP address %s for Phase 2\n", cid, (int)ntohs(localAddress->sin_port), inet_ntoa(localAddress->sin_addr));
+	freeaddrinfo(servinfo);
+
+	// Receive results
+	addr_len = sizeof their_addr;
+	if ((numbytes = recvfrom(sockfd, buf, MAXDATASIZE - 1, 0, (struct sockaddr *)&their_addr, &addr_len)) == -1)
+	{
+		perror("recvfrom");
+		exit(1);
+	}
+
+	buf[numbytes] = '\0';
+	printf("Student%c has received the application result\n", cid);
+	close(sockfd);
+	printf("End of phase 2 for Student%c\n", cid);
+}
 
 /* Parse program inforamtion from an input filef or a given department. */
 int read_studentinfo(const char *file_name, char** student_info)
@@ -259,7 +310,10 @@ void start_student(int student_id, const char *file_name)
 {
 	char **student_info = malloc(sizeof(char*)*MAXSTUDENT_INFO);		/* Array of all program information. */
 	int num = read_studentinfo(file_name, student_info);
-	send_to_server(student_info, (student_id + '1'), num);
+	if (send_to_server(student_info, (student_id + '1'), num) != 0)		/* Phase 2 first half handler. */
+	{
+		udp_handler(student_id);										/*Phase 2 second half handler if necessary. */
+	}
 	exit(0);
 }
 

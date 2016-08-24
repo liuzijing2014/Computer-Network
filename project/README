@@ -1,26 +1,54 @@
 Zijing Liu 5350978126
 
-Phase 1 complete. 
+Phase 1 complete. Phase 2 complete. 
 
-How to run: simple type "gmake" will generate two executable files, department and admission.
-Run admission first, which simulates an admission office server. Then run department, which will 
-fork three processes and each of one simulates a department client. For now, when phase 1 job is 
-done, one should manually terminate the server by "Ctrl + C".
+How to run: simple type "gmake" will generate three executable files, department, student, and 
+admission. Run admission first, which simulates an admission office server. Then run department
+, which will fork three processes and each of one simulates a department client. Lastly, run 
+student, which will fork five processes and each of one simulates a student client. All three
+programs will exit automatically.
 
 Design and Implementation:
-	There are in total three source files: Department.c, Admission.h, Admission.c, and one Makefile. 
+	There are in total four source files: Department.c, Admission.c, Student.c, and Admission.h.
+	Besides, there is a Makefile. 
 	
 	Department.c: 
-	1. It firstly forks three child processes, which represents one department. Then wait on all child 
-	processes.
+	1. It firstly forks three child processes, which represents one department. Then main thread wait 
+	on all child processes.
 
 	2. Each child process then read in program information from local file and parse the information into
 	desired format. 
 
 	3. Each child process then setup TCP connection to the server, admission office. Then send one packet 
-	for one program.
-	 
-	4. After all information is sent, close the socket and exit.
+	for one program. After all information is sent, each child process closes the TCP socket.
+
+	4. Each child process then setup UDP connection, which listens to a given port at the local machine.
+	It will wait for admission office serve to send information about admitted students.
+
+	5. After recieving information about all admitted students, each child process close UDP sockets and exit
+	the process.
+
+	6. Main process then exit.
+
+	Student.c: 
+	1. It firstly forks five child processes, each of which represents one student. Then main thread wait 
+	on all child processes.
+
+	2. Each child process then read in program information from local file and parse the information into
+	desired format. 
+
+	3. Each child process then setup TCP connection to the server, admission office. Then send packets of its
+	application information (e.g gpa and interested programs).
+	
+	4. After all information is sent, each child process will recieve a 0 or a valid from the server. If a 0
+	is recived, the child process will close TCP connection and exit. Otherwise, it closes the TCP socket and
+	set up UDP connection, which listens to a given port at the local machine. It will wait for admission office 
+	serve to send information about admission result.
+
+	5. After recieving information about the admission result students, each child process close UDP sockets 
+	and exit the process.
+
+	6. Main process then exit.
 
 	Admission.c
 	1. It firstly allocate and initilize data like counter, lock, and etc. Then it sets up the stream server 
@@ -37,7 +65,40 @@ Design and Implementation:
 	to see if all program information has recieved. If so, it signals the server that phase 1 is end.
 	It also closes the socket and exit.
 
-	Admission.h: It defines several constants that will be used by Department.c and Admission.c
+	5. Then, server enters phase2. Once the server accepts a connected socket, it forks a child process
+	to handle the connection and itself starts accpet() again. The server(main process) will accpet 5 
+	connections and then stops listening and close TCP server socket. Then server(main process) will
+	also wait for all its child processes to exit.
+
+	6. Each child process (for phase 2; student TCP connection) then read in information about a student's
+	application. After receiving all detailed information of a student's application, the child process
+	will call general_selection() with necessary data passed in. 
+
+		general_selection(): It will first read in existing program information from the local file. Then
+		It will write detail admission decision (e.g student name, department id, accpet/reject, program name,
+		etc) for a student to another local file based on student's gpa and interested programs and required gpas 
+		of existing programs. It returns 0 if there is no program matchs a student's interested program. 
+		Otherwise, it returns 1.
+
+	Child process will send a 0 or a valid to the student client based on the return value of general_selection().
+	Sending A vaild will inform student client for further UDP connection.
+
+	7. Then server enters the second half of phase 2. There are two array that stores UDP socket id.
+
+			depart_sockets array: store UDP socket id for each UDP connection to a department. It has a size of 3.
+			student_sockets array: store UDP socket id for each UDP connection to a student. It has a size of 5.
+	
+	All entries of both arrays are initialized with -10, which means there is no UDP connection has been setup for 
+	any department/student. It then reads in admission decisions written to the local file, based on the details of
+	each admission decision, it will find out which student and which department need to be informed (send a msg).
+	If there is no UDP connection been setup for the student/department that need to be informed, the server will
+	create a UDP connection and store corresponding UDP socket id in depart_sockets array or student_sockets array.
+	Otherwise, just send msg through the existing UDP connection to the given student/department by using the UDP
+	socket id stored in depart_sockets array/student_sockets array.
+
+	8. After sending all msg to students/departments. The server will clean up all allocated resources and exit.
+
+	Admission.h: It defines several constants that will be used by Department.c, Student.c, and Admission.c
 		
 		/* Constants for departments */
 		#define DEPARTMENT_A (int)0
@@ -52,21 +113,42 @@ Design and Implementation:
 
 Message Transmission:
 	
-	Phase 1 message transmission is in the following format:
+	Phase 1 TCP message transmission is in the following format:
 
-	deparment:												admission:
-	send department id			---------------------->		receive and store department id
-	receive ACK					<---------------------		send ACK
+	deparment:							admission:
+	send department id		---------------------->		receive and store department id
+	receive ACK			<---------------------		send ACK
 	send first program packet	---------------------->		recieve and store first program packet
-	receive ACK					<---------------------		send ACK
+	receive ACK			<---------------------		send ACK
 	send second program packet	---------------------->		recieve and store second program packet
-	receive ACK					<---------------------		send ACK
+	receive ACK			<---------------------		send ACK
 	send third program packet	---------------------->		recieve and store third program packet
-	receive ACK					<---------------------		send ACK
-	send END					---------------------->		recieve END msg
+	receive ACK			<---------------------		send ACK
+	send END			---------------------->		recieve END msg
 	receive ACK so close socket	<--------------------->		send ACK and close socket
 
+	Phase 2 first half TCP message transimission is similar with the one shown above.
+
+	student:								admission:
+	send student id			---------------------->		receive and store student id
+	receive ACK			<---------------------		send ACK
+	...				....				...
+
+	Phase 2 second half UDP message transmission is in the following format:
+
+	student:							admission:
+	recieve admission result 1	<---------------------		send admission result 1
+	department:							admission:
+	recieve admission result 1	<---------------------		send admission result 1 with different format
+	
+	student:							admission:
+	...				<---------------------		send...
+	department:							admission:
+	...				<---------------------		send...
+
+	...				...				...
+
 Reused Code:
-	Socket setup and reaping zombie process code blocks are from Beej's guide. I have 
-	comment before any block of code that is from Beej's guide.
+	TCP/UDP socket setup and reaping zombie process code blocks are from Beej's guide. I have 
+	comment before the code that is from Beej's guide.
 	
